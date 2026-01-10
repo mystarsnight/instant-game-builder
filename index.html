@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Instant Game Builder</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font-family:Arial;background:#b3d9ff;margin:0;padding:10px}
+#app{background:#fff;border-radius:12px;padding:12px;max-width:900px;margin:auto}
+textarea,button{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
+button{background:#4caf50;color:#fff;border:none;cursor:pointer}
+#game{margin-top:10px;height:360px;background:#e3f2fd;position:relative;overflow:hidden;border-radius:10px}
+.obj{position:absolute;width:60px;height:60px;border-radius:12px;
+display:flex;align-items:center;justify-content:center;font-weight:bold;
+color:#fff;cursor:pointer;user-select:none}
+#stats{margin-top:8px;font-weight:bold}
+.list{background:#eee;padding:6px;border-radius:6px;margin:4px 0;cursor:pointer}
+.notice{background:#222;color:#fff;padding:8px;border-radius:6px;display:none}
+</style>
+</head>
+<body>
+
+<div id="app">
+<h2>Instant Game Builder</h2>
+
+<div id="notice" class="notice"></div>
+
+<textarea id="aiInput" rows="4" placeholder="Describe a game (not a story)"></textarea>
+<button onclick="generate()">Generate Game</button>
+
+<textarea id="rules" rows="6"></textarea>
+<button onclick="play()">Play</button>
+<button onclick="saveLocal()">Save</button>
+<button onclick="share()">Copy Share Link</button>
+<button onclick="exportRoblox()">Export Roblox</button>
+
+<div id="game"></div>
+<div id="stats"></div>
+
+<h3>My Games (Local)</h3>
+<div id="library"></div>
+</div>
+
+<script>
+const game=document.getElementById('game')
+const rulesBox=document.getElementById('rules')
+const notice=document.getElementById('notice')
+
+let rules=[],objects={},score=0,win=5,keys={}
+
+const clickSound=new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=")
+const winSound=new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=")
+
+function show(t){
+  notice.innerText=t
+  notice.style.display='block'
+  setTimeout(()=>notice.style.display='none',2000)
+}
+
+/* ========= AI GENERATOR ========= */
+function generate(){
+  let text=aiInput.value.toLowerCase()
+  let out=[]
+
+  // player
+  out.push("spawn player")
+  out.push("move player arrows")
+
+  // objects
+  let obj="coin"
+  if(text.includes("star")) obj="star"
+  if(text.includes("gem")) obj="gem"
+
+  let gain=1
+  let nums=text.match(/\d+/g)
+  if(nums) gain=parseInt(nums[0])
+
+  out.push("spawn "+obj)
+  out.push("click "+obj+" gain "+gain)
+
+  // win condition (FIXED)
+  win=5
+  if(text.includes("win") && nums){
+    win=parseInt(nums[nums.length-1])
+  }
+  out.push("win "+win)
+
+  rulesBox.value=out.join("\n")
+  show("Game generated")
+}
+
+/* ========= GAME ENGINE ========= */
+function play(){
+  game.innerHTML=""
+  objects={}
+  score=0
+  win=5
+
+  rules=rulesBox.value.split("\n").filter(Boolean)
+
+  rules.forEach(r=>{
+    if(r.startsWith("spawn")){
+      spawn(r.split(" ")[1])
+    }
+    if(r.startsWith("win")){
+      win=parseInt(r.split(" ")[1])
+    }
+  })
+  update()
+}
+
+function spawn(name){
+  const d=document.createElement("div")
+  d.className="obj"
+  d.innerText=name[0].toUpperCase()
+  d.style.background=name==="player"?"#1e88e5":"#fbc02d"
+  d.style.left=Math.random()*80+"%"
+  d.style.top=Math.random()*80+"%"
+
+  if(name!=="player"){
+    d.onclick=()=>{
+      rules.forEach(r=>{
+        if(r.startsWith("click "+name)){
+          score+=parseInt(r.split(" ").pop())
+          clickSound.play()
+        }
+      })
+      update()
+    }
+  }
+
+  game.appendChild(d)
+  objects[name]=d
+}
+
+/* ========= CONTROLS ========= */
+window.onkeydown=e=>{
+  if(!objects.player) return
+  let p=objects.player
+  let x=p.offsetLeft,y=p.offsetTop
+  if(e.key==="ArrowLeft")x-=10
+  if(e.key==="ArrowRight")x+=10
+  if(e.key==="ArrowUp")y-=10
+  if(e.key==="ArrowDown")y+=10
+  p.style.left=x+"px"
+  p.style.top=y+"px"
+}
+
+/* ========= STATS ========= */
+function update(){
+  stats.innerText="Score: "+score+" / "+win
+  if(score>=win){
+    stats.innerText="YOU WIN"
+    winSound.play()
+    show("You win!")
+  }
+}
+
+/* ========= LOCAL SAVE ========= */
+function saveLocal(){
+  let list=JSON.parse(localStorage.getItem("games")||"[]")
+  list.push(rulesBox.value)
+  localStorage.setItem("games",JSON.stringify(list))
+  loadLibrary()
+  show("Saved")
+}
+
+function loadLibrary(){
+  library.innerHTML=""
+  let list=JSON.parse(localStorage.getItem("games")||"[]")
+  list.forEach((g,i)=>{
+    let d=document.createElement("div")
+    d.className="list"
+    d.innerText="Game "+(i+1)
+    d.onclick=()=>{
+      rulesBox.value=g
+      play()
+    }
+    library.appendChild(d)
+  })
+}
+
+/* ========= SHARE ========= */
+function share(){
+  let link=location.origin+location.pathname+"?game="+
+    btoa(encodeURIComponent(rulesBox.value))
+  navigator.clipboard.writeText(link)
+  show("Link copied")
+}
+
+/* ========= ROBLOX EXPORT ========= */
+function exportRoblox(){
+  let lua="-- Instant Game (Generated)\nlocal score=0\n"
+  rules.forEach(r=>lua+="-- "+r+"\n")
+  download(lua,"InstantGame.lua")
+}
+
+function download(data,name){
+  let a=document.createElement("a")
+  a.href=URL.createObjectURL(new Blob([data]))
+  a.download=name
+  a.click()
+}
+
+/* ========= LOAD FROM SHARE ========= */
+let p=new URLSearchParams(location.search)
+if(p.has("game")){
+  rulesBox.value=decodeURIComponent(atob(p.get("game")))
+  play()
+}
+
+loadLibrary()
+</script>
+
+</body>
+</html>
