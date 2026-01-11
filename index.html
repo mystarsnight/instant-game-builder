@@ -17,45 +17,28 @@ color:#fff;font-weight:bold;user-select:none}
 .row{display:flex;gap:6px;background:#eee;padding:6px;border-radius:6px;margin:4px 0}
 #notice{background:#222;color:#fff;padding:8px;border-radius:6px;display:none}
 
-/* ===== MODAL ===== */
+/* MODAL */
 #overlay{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.6);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:999;
+  position:fixed;inset:0;background:rgba(0,0,0,.6);
+  display:none;align-items:center;justify-content:center;z-index:999;
 }
-#modal{
-  background:#fff;
-  padding:20px;
-  border-radius:12px;
-  max-width:320px;
-  text-align:center;
-}
+#modal{background:#fff;padding:20px;border-radius:12px;max-width:320px;text-align:center}
 #modal button{margin-top:10px}
 
-/* ===== MOBILE AI BOX ===== */
+/* MOBILE AI BOX */
 #mobileAI{
-  display:none;
-  background:#e8f5e9;
-  padding:12px;
-  border-radius:10px;
-  margin-bottom:10px;
+  display:none;background:#e8f5e9;padding:12px;border-radius:10px;margin-bottom:10px
 }
 </style>
 </head>
 <body>
 
-<!-- FIRST TIME POPUP -->
+<!-- FIRST VISIT POPUP -->
 <div id="overlay">
   <div id="modal">
     <h3>Welcome 👋</h3>
-    <p>
-      You need to use <b>AI</b> to make a game right now.<br>
-      Tap <b>AI Make Game</b> to create one instantly.
-    </p>
+    <p>You need to use <b>AI</b> to make a game right now.<br>
+    Tap <b>AI Make Game</b> to start.</p>
     <button onclick="dismiss()">OK</button>
   </div>
 </div>
@@ -63,20 +46,14 @@ color:#fff;font-weight:bold;user-select:none}
 <div id="app">
 <h2>Instant Game Builder</h2>
 
-<!-- MOBILE AI HELPER -->
 <div id="mobileAI">
   <b>📱 Mobile Tip</b><br>
-  Tap <b>AI Make Game</b> to instantly create a playable game.
+  Tap <b>AI Make Game</b> to instantly create a game.
 </div>
 
 <div id="notice"></div>
 
-<textarea id="rules" rows="6" placeholder="Example:
-spawn player
-spawn coin
-click coin gain 1
-score to win 5
-move arrows"></textarea>
+<textarea id="rules" rows="6"></textarea>
 
 <button onclick="buildGame()">Build & Play</button>
 <button onclick="aiGame()">🤖 AI Make Game</button>
@@ -91,29 +68,27 @@ move arrows"></textarea>
 </div>
 
 <script>
-/* ---------- FIRST TIME MESSAGE ---------- */
+/* ---------- FIRST VISIT ---------- */
 function dismiss(){
-  document.getElementById("overlay").style.display="none"
+  overlay.style.display="none"
   localStorage.setItem("aiNoticeSeen","1")
 }
 if(!localStorage.getItem("aiNoticeSeen")){
-  document.getElementById("overlay").style.display="flex"
+  overlay.style.display="flex"
 }
-
-/* ---------- MOBILE AI BOX ---------- */
 if(/Mobi|Android/i.test(navigator.userAgent)){
-  document.getElementById("mobileAI").style.display="block"
+  mobileAI.style.display="block"
 }
 
 /* ---------- BASIC ---------- */
-const rulesBox=document.getElementById("rules")
+const rulesBox=rules
 const game=document.getElementById("game")
 const stats=document.getElementById("stats")
 const lib=document.getElementById("library")
 const notice=document.getElementById("notice")
 function msg(t){notice.innerText=t;notice.style.display="block";setTimeout(()=>notice.style.display="none",2000)}
 
-let rules=[],objs={},score=0,win=5,keys={}
+let rulesArr=[],objs={},score=0,win=5,keys={}
 
 /* ---------- BUILD ---------- */
 function buildGame(){
@@ -121,9 +96,9 @@ function buildGame(){
   objs={}
   score=0
   win=5
-  rules=rulesBox.value.split("\n").map(r=>r.trim()).filter(Boolean)
+  rulesArr=rulesBox.value.split("\n").map(r=>r.trim()).filter(Boolean)
 
-  rules.forEach(r=>{
+  rulesArr.forEach(r=>{
     if(r.startsWith("spawn ")) spawn(r.split(" ")[1])
     if(r.startsWith("score to win")) win=parseInt(r.split(" ").pop())||5
   })
@@ -136,11 +111,11 @@ function spawn(name){
   d.className="obj"
   d.style.left=Math.random()*80+"%"
   d.style.top=Math.random()*80+"%"
-  d.style.background=colorFromName(name)
+  d.style.background=color(name)
   d.innerText=name[0].toUpperCase()
 
   d.onclick=()=>{
-    rules.forEach(r=>{
+    rulesArr.forEach(r=>{
       if(r.startsWith("click "+name) && r.includes("gain")){
         score+=parseInt(r.split("gain")[1])||1
       }
@@ -152,7 +127,7 @@ function spawn(name){
   objs[name]=d
 }
 
-function colorFromName(n){
+function color(n){
   const c=["#e53935","#1e88e5","#43a047","#fb8c00","#8e24aa"]
   let h=0;for(let x of n)h+=x.charCodeAt(0)
   return c[h%c.length]
@@ -161,17 +136,15 @@ function colorFromName(n){
 /* ---------- MOVEMENT ---------- */
 window.onkeydown=e=>keys[e.key]=true
 window.onkeyup=e=>keys[e.key]=false
-
 setInterval(()=>{
-  if(objs.player && rules.includes("move arrows")){
+  if(objs.player && rulesArr.includes("move arrows")){
     let p=objs.player
     let x=p.offsetLeft,y=p.offsetTop
     if(keys.ArrowLeft)x-=5
     if(keys.ArrowRight)x+=5
     if(keys.ArrowUp)y-=5
     if(keys.ArrowDown)y+=5
-    p.style.left=x+"px"
-    p.style.top=y+"px"
+    p.style.left=x+"px";p.style.top=y+"px"
   }
 },40)
 
@@ -181,30 +154,34 @@ function update(){
     stats.innerText="YOU WIN 🎉"
     msg("You win!")
   }else{
-    stats.innerText="Score: "+score+" / "+win
+    stats.innerText=`Score: ${score} / ${win}`
   }
 }
 
-/* ---------- AI ---------- */
+/* ---------- REAL AI (VARIATION) ---------- */
 function aiGame(){
-  const t=prompt(
-    "Describe your game:\ncollect coins to 10\navoid enemies",
-    "collect coins to 10"
-  )
-  if(!t) return
-  const n=t.match(/\d+/)
-  rulesBox.value=[
-    "spawn player",
-    "spawn coin",
-    "click coin gain 1",
-    "move arrows",
-    "score to win "+(n?n[0]:5)
-  ].join("\n")
+  const winTarget=Math.floor(Math.random()*10)+3
+  const gain=Math.floor(Math.random()*3)+1
+  const withMove=Math.random()>0.4
+  const extra=Math.random()>0.6
+
+  let out=["spawn player"]
+  if(withMove) out.push("move arrows")
+  out.push("spawn coin")
+  out.push(`click coin gain ${gain}`)
+
+  if(extra){
+    out.push("spawn gem")
+    out.push(`click gem gain ${gain+1}`)
+  }
+
+  out.push(`score to win ${winTarget}`)
+  rulesBox.value=out.join("\n")
   buildGame()
-  msg("AI game created")
+  msg("AI generated a new game")
 }
 
-/* ---------- SAVE SYSTEM ---------- */
+/* ---------- SAVE ---------- */
 function getGames(){return JSON.parse(localStorage.getItem("games")||"[]")}
 function setGames(g){localStorage.setItem("games",JSON.stringify(g))}
 
@@ -213,9 +190,7 @@ function saveGame(){
   if(!name) return
   const g=getGames()
   g.push({id:Date.now(),name,rules:rulesBox.value})
-  setGames(g)
-  loadGames()
-  msg("Saved")
+  setGames(g);loadGames();msg("Saved")
 }
 
 function loadGames(){
@@ -232,8 +207,7 @@ function loadGames(){
       }),
       btn("Delete",()=>{
         if(confirm("Delete?")){
-          setGames(getGames().filter(x=>x.id!==g.id))
-          loadGames()
+          setGames(getGames().filter(x=>x.id!==g.id));loadGames()
         }
       })
     )
@@ -249,7 +223,6 @@ function copyLink(){
   navigator.clipboard.writeText(location.origin+location.pathname+"?g="+d)
   msg("Link copied")
 }
-
 const q=new URLSearchParams(location.search)
 if(q.has("g")){
   rulesBox.value=decodeURIComponent(atob(q.get("g")))
