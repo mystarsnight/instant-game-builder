@@ -1,216 +1,168 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Instant Game Builder</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Instant Game Builder (Supabase)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{font-family:Arial;background:#b3d9ff;margin:0;padding:10px}
 #app{background:#fff;border-radius:12px;padding:12px;max-width:900px;margin:auto}
-textarea,button{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
+textarea,button,input{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
 button{background:#4caf50;color:#fff;border:none;cursor:pointer}
-#game{margin-top:10px;height:360px;background:#e3f2fd;position:relative;overflow:hidden;border-radius:10px}
-.obj{position:absolute;width:60px;height:60px;border-radius:12px;
-display:flex;align-items:center;justify-content:center;font-weight:bold;
-color:#fff;cursor:pointer;user-select:none}
-#stats{margin-top:8px;font-weight:bold}
-.list{background:#eee;padding:6px;border-radius:6px;margin:4px 0;cursor:pointer}
-.notice{background:#222;color:#fff;padding:8px;border-radius:6px;display:none}
+#gameArea{margin-top:15px;height:350px;border-radius:10px;background:#e3f2fd;position:relative;overflow:hidden}
+.obj{position:absolute;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#fff;cursor:pointer;user-select:none}
+#stats{margin-top:10px;font-weight:bold}
+.listItem{padding:6px;background:#eee;margin:4px 0;border-radius:6px;cursor:pointer}
+.notice{background:#222;color:#fff;padding:10px;border-radius:8px;margin:6px 0;display:none}
+.admin{background:#ffebee;border:2px solid #e53935;padding:8px;border-radius:8px;margin-top:10px}
+.small{font-size:12px;color:#555}
 </style>
 </head>
 <body>
-
 <div id="app">
 <h2>Instant Game Builder</h2>
 
+
 <div id="notice" class="notice"></div>
 
-<textarea id="aiInput" rows="4" placeholder="Describe a game (not a story)"></textarea>
-<button onclick="generate()">Generate Game</button>
+<h3>Account</h3>
+<input id="email" placeholder="Email">
+<input id="password" type="password" placeholder="Password">
+<button onclick="login()">Login / Sign Up</button>
+<div id="userStatus" class="small"></div>
 
-<textarea id="rules" rows="6"></textarea>
-<button onclick="play()">Play</button>
-<button onclick="saveLocal()">Save</button>
-<button onclick="share()">Copy Share Link</button>
-<button onclick="exportRoblox()">Export Roblox</button>
+<h3>Game Rules</h3>
+<textarea id="input" rows="6"></textarea>
 
-<div id="game"></div>
+<button onclick="buildGame()">Build & Play</button>
+<button onclick="saveGame()">Save</button>
+<button onclick="publishGame()">Publish</button>
+<button onclick="shareGame()">Share</button>
+<button onclick="joinMultiplayer()">Join Multiplayer</button>
+
+<div id="gameArea"></div>
 <div id="stats"></div>
 
-<h3>My Games (Local)</h3>
-<div id="library"></div>
+<h3>My Games</h3>
+<div id="myGames"></div>
+
+<h3>Public Games</h3>
+<div id="publicGames"></div>
+
+<div id="adminPanel" class="admin" style="display:none">
+<h3>Admin Panel</h3>
+<div id="adminGames"></div>
+</div>
 </div>
 
-<script>
-const game=document.getElementById('game')
-const rulesBox=document.getElementById('rules')
-const notice=document.getElementById('notice')
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-let rules=[],objects={},score=0,win=5,keys={}
+const supabase = createClient(
+  'https://tmnpqtedyvifvabhvswl.supabase.co',
+  'sb_publishable_EnfDPdGC3knvrMKgIrtU2g_2zUJL_Fs'
+)
 
-const clickSound=new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=")
-const winSound=new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=")
+let user=null, isAdmin=false
+const SUPER_ADMIN_EMAIL = 'blakestalder123@gmail.com'
 
-function show(t){
-  notice.innerText=t
-  notice.style.display='block'
-  setTimeout(()=>notice.style.display='none',2000)
+function show(msg){ notice.innerText=msg; notice.style.display='block'; setTimeout(()=>notice.style.display='none',3000) }
+
+// ===== AUTH =====
+window.login=async()=>{
+  const e=email.value,p=password.value
+  let r=await supabase.auth.signInWithPassword({email:e,password:p})
+  if(r.error) r=await supabase.auth.signUp({email:e,password:p})
+  if(r.error) return show(r.error.message)
+  user=r.data.user
+  userStatus.innerText='Logged in as '+user.email
+  isAdmin = user.email === SUPER_ADMIN_EMAIL('@admin.com')
+  adminPanel.style.display=isAdmin?'block':'none'
+  show('Logged in')
+  loadMyGames(); loadPublic(); if(isAdmin) loadAdmin()
 }
 
-/* ========= AI GENERATOR ========= */
-function generate(){
-  let text=aiInput.value.toLowerCase()
-  let out=[]
-
-  // player
-  out.push("spawn player")
-  out.push("move player arrows")
-
-  // objects
-  let obj="coin"
-  if(text.includes("star")) obj="star"
-  if(text.includes("gem")) obj="gem"
-
-  let gain=1
-  let nums=text.match(/\d+/g)
-  if(nums) gain=parseInt(nums[0])
-
-  out.push("spawn "+obj)
-  out.push("click "+obj+" gain "+gain)
-
-  // win condition (FIXED)
-  win=5
-  if(text.includes("win") && nums){
-    win=parseInt(nums[nums.length-1])
-  }
-  out.push("win "+win)
-
-  rulesBox.value=out.join("\n")
-  show("Game generated")
-}
-
-/* ========= GAME ENGINE ========= */
-function play(){
-  game.innerHTML=""
-  objects={}
-  score=0
-  win=5
-
-  rules=rulesBox.value.split("\n").filter(Boolean)
-
-  rules.forEach(r=>{
-    if(r.startsWith("spawn")){
-      spawn(r.split(" ")[1])
-    }
-    if(r.startsWith("win")){
-      win=parseInt(r.split(" ")[1])
-    }
-  })
+// ===== GAME ENGINE =====
+let rules=[],objects={},score=0,winScore=999,keys={}
+window.buildGame=()=>{
+  gameArea.innerHTML=''; objects={}; score=0
+  rules=input.value.split('\n').filter(Boolean)
+  rules.forEach(r=>{ if(r.startsWith('spawn')) spawn(r.split(' ')[1]); if(r.startsWith('score to win')) winScore=parseInt(r.split(' ').pop()) })
   update()
 }
 
-function spawn(name){
-  const d=document.createElement("div")
-  d.className="obj"
-  d.innerText=name[0].toUpperCase()
-  d.style.background=name==="player"?"#1e88e5":"#fbc02d"
-  d.style.left=Math.random()*80+"%"
-  d.style.top=Math.random()*80+"%"
+function spawn(n){
+  const d=document.createElement('div'); d.className='obj'; d.innerText=n.toUpperCase()
+  d.style.width='60px'; d.style.height='60px'; d.style.background=n==='coin'?'#fbc02d':'#43a047'
+  d.style.left=Math.random()*80+'%'; d.style.top=Math.random()*80+'%'
+  d.onclick=()=>{ rules.forEach(r=>{ if(r.startsWith('click '+n)&&r.includes('gain')) score+=parseInt(r.split('gain')[1]) }); update() }
+  gameArea.appendChild(d); objects[n]=d
+}
 
-  if(name!=="player"){
-    d.onclick=()=>{
-      rules.forEach(r=>{
-        if(r.startsWith("click "+name)){
-          score+=parseInt(r.split(" ").pop())
-          clickSound.play()
-        }
-      })
-      update()
-    }
+window.onkeydown=e=>keys[e.key]=true
+window.onkeyup=e=>keys[e.key]=false
+setInterval(()=>{
+  if(objects.player && rules.includes('press arrow move player')){
+    const p=objects.player; let x=p.offsetLeft,y=p.offsetTop
+    if(keys.ArrowLeft)x-=5;if(keys.ArrowRight)x+=5;if(keys.ArrowUp)y-=5;if(keys.ArrowDown)y+=5
+    p.style.left=x+'px'; p.style.top=y+'px'
+    syncPlayer()
   }
+},40)
 
-  game.appendChild(d)
-  objects[name]=d
+function update(){ if(score>=winScore){ stats.innerText='YOU WIN'; show('You win') } else stats.innerText='Score: '+score }
+
+// ===== LOCAL SAVE / LOAD (NO ACCOUNT NEEDED) =====
+window.saveGame=()=>{
+  const games=JSON.parse(localStorage.getItem('myGames')||'[]')
+  games.push({rules:input.value,created:Date.now()})
+  localStorage.setItem('myGames',JSON.stringify(games))
+  show('Saved locally')
+  loadMyGames()
 }
 
-/* ========= CONTROLS ========= */
-window.onkeydown=e=>{
-  if(!objects.player) return
-  let p=objects.player
-  let x=p.offsetLeft,y=p.offsetTop
-  if(e.key==="ArrowLeft")x-=10
-  if(e.key==="ArrowRight")x+=10
-  if(e.key==="ArrowUp")y-=10
-  if(e.key==="ArrowDown")y+=10
-  p.style.left=x+"px"
-  p.style.top=y+"px"
-}
-
-/* ========= STATS ========= */
-function update(){
-  stats.innerText="Score: "+score+" / "+win
-  if(score>=win){
-    stats.innerText="YOU WIN"
-    winSound.play()
-    show("You win!")
-  }
-}
-
-/* ========= LOCAL SAVE ========= */
-function saveLocal(){
-  let list=JSON.parse(localStorage.getItem("games")||"[]")
-  list.push(rulesBox.value)
-  localStorage.setItem("games",JSON.stringify(list))
-  loadLibrary()
-  show("Saved")
-}
-
-function loadLibrary(){
-  library.innerHTML=""
-  let list=JSON.parse(localStorage.getItem("games")||"[]")
-  list.forEach((g,i)=>{
-    let d=document.createElement("div")
-    d.className="list"
-    d.innerText="Game "+(i+1)
-    d.onclick=()=>{
-      rulesBox.value=g
-      play()
-    }
-    library.appendChild(d)
+function loadMyGames(){
+  const games=JSON.parse(localStorage.getItem('myGames')||'[]')
+  myGames.innerHTML=''
+  games.forEach((g,i)=>{
+    const d=document.createElement('div')
+    d.className='listItem'
+    d.innerText='Local Game '+(i+1)
+    d.onclick=()=>{ input.value=g.rules; buildGame() }
+    myGames.appendChild(d)
   })
 }
 
-/* ========= SHARE ========= */
-function share(){
-  let link=location.origin+location.pathname+"?game="+
-    btoa(encodeURIComponent(rulesBox.value))
-  navigator.clipboard.writeText(link)
-  show("Link copied")
+function loadPublic(){}
+
+async function loadMyGames(){ if(!user) return; const {data}=await supabase.from('games').select('*').eq('user_id',user.id); myGames.innerHTML=''; data.forEach(g=>{ const d=document.createElement('div'); d.className='listItem'; d.innerText='My Game'; d.onclick=()=>{input.value=g.rules; buildGame()}; myGames.appendChild(d) }) }
+async function loadPublic(){ const {data}=await supabase.from('games').select('*').eq('public',true).eq('flagged',false); publicGames.innerHTML=''; data.forEach(g=>{ const d=document.createElement('div'); d.className='listItem'; d.innerText='Public Game'; d.onclick=()=>{input.value=g.rules; buildGame()}; publicGames.appendChild(d) }) }
+
+// ===== ADMIN =====
+async function loadAdmin(){ if(!isAdmin) return;(){ const {data}=await supabase.from('games').select('*'); adminGames.innerHTML=''; data.forEach(g=>{ const d=document.createElement('div'); d.className='listItem'; d.innerText=(g.public?'[PUBLIC] ':'')+g.rules.split('\n')[0]; const b=document.createElement('button'); b.innerText='FLAG'; b.onclick=async()=>{ await supabase.from('games').update({flagged:true}).eq('id',g.id); show('Flagged'); loadAdmin() }; d.appendChild(b); adminGames.appendChild(d) }) }
+
+// ===== MULTIPLAYER (REALTIME) =====
+let room=null
+window.joinMultiplayer=async()=>{
+  room=prompt('Room name?')
+  if(!room) return
+  await supabase.from('players').upsert({room:room,user_id:user.id,x:0,y:0})
+  show('Joined room '+room)
 }
 
-/* ========= ROBLOX EXPORT ========= */
-function exportRoblox(){
-  let lua="-- Instant Game (Generated)\nlocal score=0\n"
-  rules.forEach(r=>lua+="-- "+r+"\n")
-  download(lua,"InstantGame.lua")
-}
+async function syncPlayer(){ if(!room||!user||!objects.player) return; await supabase.from('players').upsert({room:room,user_id:user.id,x:objects.player.offsetLeft,y:objects.player.offsetTop}) }
 
-function download(data,name){
-  let a=document.createElement("a")
-  a.href=URL.createObjectURL(new Blob([data]))
-  a.download=name
-  a.click()
-}
+supabase.channel('players').on('postgres_changes',{event:'*',schema:'public',table:'players'},payload=>{
+  if(!room||payload.new.room!==room||payload.new.user_id===user?.id) return
+  let o=objects['p_'+payload.new.user_id]
+  if(!o){ o=document.createElement('div'); o.className='obj'; o.style.background='#1e88e5'; o.innerText='P'; gameArea.appendChild(o); objects['p_'+payload.new.user_id]=o }
+  o.style.left=payload.new.x+'px'; o.style.top=payload.new.y+'px'
+}).subscribe()
 
-/* ========= LOAD FROM SHARE ========= */
-let p=new URLSearchParams(location.search)
-if(p.has("game")){
-  rulesBox.value=decodeURIComponent(atob(p.get("game")))
-  play()
-}
+// ===== SHARE =====
+window.shareGame=()=>{ const u=btoa(encodeURIComponent(input.value)); navigator.clipboard.writeText(location.origin+location.pathname+'?game='+u); show('Link copied') }
 
-loadLibrary()
+(function(){ const p=new URLSearchParams(location.search); if(p.has('game')){ input.value=decodeURIComponent(atob(p.get('game'))); buildGame() } })()
 </script>
-
 </body>
 </html>
