@@ -7,25 +7,25 @@
 <style>
 body{margin:0;font-family:Arial;background:#b3d9ff}
 #app{max-width:1000px;margin:auto;background:#fff;padding:12px;border-radius:12px}
-textarea,button,input,select{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
+textarea,button,input{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
 button{background:#4caf50;color:#fff;border:none;cursor:pointer}
 button.small{width:auto;padding:6px 10px;font-size:12px}
 #game{height:360px;background:#e3f2fd;border-radius:10px;position:relative;overflow:hidden}
-.obj{width:60px;height:60px;border-radius:12px;position:absolute;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;user-select:none;cursor:pointer}
-.enemy{animation:enemyMove 2s infinite alternate}
-@keyframes enemyMove{from{transform:translateX(0)}to{transform:translateX(40px)}}
+.obj{width:56px;height:56px;border-radius:12px;position:absolute;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.enemy{filter:hue-rotate(180deg)}
 .row{display:flex;gap:6px;background:#eee;padding:6px;border-radius:6px;margin:4px 0;flex-wrap:wrap}
 #notice{background:#222;color:#fff;padding:8px;border-radius:6px;display:none}
-#overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:999}
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:999}
 #modal{background:#fff;padding:20px;border-radius:12px;max-width:360px;text-align:center}
 #mobileAI{background:#e8f5e9;padding:12px;border-radius:10px;margin-bottom:10px}
 </style>
 </head>
 <body>
+
 <div id="overlay">
   <div id="modal">
     <h3>AI Game Builder</h3>
-    <p>Describe any simple game. Example:<br><i>fast game with enemies, health, coins, 20 points to win</i></p>
+    <p>Type ANY game idea.<br>No rules needed.</p>
     <button onclick="dismiss()">OK</button>
   </div>
 </div>
@@ -35,15 +35,15 @@ button.small{width:auto;padding:6px 10px;font-size:12px}
 
 <div id="mobileAI">
   <b>🤖 AI Game Generator</b>
-  <input id="aiInput" placeholder="Describe your game (coins, enemies, timer, health, 1k score)">
-  <button onclick="aiGame()">AI Generate Game</button>
+  <input id="aiInput" placeholder="Example: enemy game with coins, 1k win">
+  <button onclick="aiGame()">Generate Game</button>
 </div>
 
 <div id="notice"></div>
 
-<textarea id="rules" rows="8" placeholder="Game rules will appear here..."></textarea>
+<textarea id="rules" rows="7"></textarea>
 
-<button onclick="buildGame()">▶ Build & Play</button>
+<button onclick="buildGame()">▶ Play</button>
 <button onclick="saveGame()">💾 Save</button>
 <button onclick="copyLink()">🔗 Copy Link</button>
 <button onclick="exportRoblox()">🎮 Export Roblox</button>
@@ -56,235 +56,139 @@ button.small{width:auto;padding:6px 10px;font-size:12px}
 </div>
 
 <script>
-/* ---------- UI ---------- */
-const rulesBox=document.getElementById("rules")
+const rulesBox=rules=document.getElementById("rules")
 const game=document.getElementById("game")
 const stats=document.getElementById("stats")
 const lib=document.getElementById("library")
 const notice=document.getElementById("notice")
-const overlay=document.getElementById("overlay")
 const aiInput=document.getElementById("aiInput")
 
-function show(msg){notice.innerText=msg;notice.style.display="block";setTimeout(()=>notice.style.display="none",2500)}
-if(!localStorage.getItem("aiSeen")) overlay.style.display="flex"
-function dismiss(){overlay.style.display="none";localStorage.setItem("aiSeen","1")}
+function show(t){notice.innerText=t;notice.style.display="block";setTimeout(()=>notice.style.display="none",2000)}
+if(localStorage.getItem("seen")!=="1"){}
+function dismiss(){document.getElementById("overlay").style.display="none";localStorage.setItem("seen","1")}
 
-/* ---------- GAME STATE ---------- */
-let rulesArr=[],objs={},enemies=[],score=0,health=100,win=10,timeLeft=0,keys={}
+let objs={},enemies=[],rulesArr=[]
+let score=0,health=100,win=10,keys={}
 
-/* ---------- BUILD ---------- */
+function emoji(name){
+  const m={player:"🙂",coin:"🪙",gem:"💎",enemy:"👾"}
+  return m[name]||"⭐"
+}
+
+function img(e){
+  return `data:image/svg+xml;base64,${btoa(`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect rx='12' width='100%' height='100%' fill='#fff'/><text x='50%' y='55%' font-size='40' text-anchor='middle'>${e}</text></svg>`)}`
+}
+
 function buildGame(){
-  game.innerHTML="";objs={};enemies=[];score=0;health=100;win=10;timeLeft=0
-  rulesArr=rulesBox.value.split("\n").map(x=>x.trim()).filter(Boolean)
+  game.innerHTML=""
+  objs={};enemies=[]
+  score=0;health=100;win=10
+  rulesArr=rulesBox.value.split("\n")
 
   rulesArr.forEach(r=>{
-    if(r.startsWith("spawn ")) spawn(r.split(" ")[1])
-    if(r.startsWith("enemy")) spawnEnemy()
-    if(r.startsWith("score to win")) win=parseInt(r.replace(/\D/g,""))||10
-    if(r.startsWith("health")) health=parseInt(r.replace(/\D/g,""))||100
-    if(r.startsWith("timer")) timeLeft=parseInt(r.replace(/\D/g,""))||0
+    if(r.startsWith("spawn "))spawn(r.split(" ")[1])
+    if(r==="enemy")spawnEnemy()
+    if(r.startsWith("win"))win=parseNum(r)
   })
   update()
 }
 
-/* ---------- OBJECTS ---------- */
 function spawn(name){
-  if(objs[name]) return
+  if(objs[name])return
   const d=document.createElement("div")
   d.className="obj"
+  d.style.background=`url(${img(emoji(name))}) center/contain no-repeat`
   d.style.left=Math.random()*80+"%"
   d.style.top=Math.random()*80+"%"
-  d.style.backgroundImage="url("+autoImage(name)+")"
-  d.style.backgroundSize="contain"
-  d.style.backgroundRepeat="no-repeat"
-  d.style.backgroundPosition="center"
-  d.style.backgroundColor="#fff"
-  d.innerText=""
-
-  d.onclick=()=>{
-    rulesArr.forEach(r=>{
-      if(r.startsWith("click "+name)){
-        if(r.includes("gain")) score+=parseInt(r.replace(/\D/g,""))||1
-        if(r.includes("heal")) health+=parseInt(r.replace(/\D/g,""))||5
-      }
-    })
-    update()
-  }
-
-  game.appendChild(d)
-  objs[name]=d
-}function autoImage(name){
-  const emoji={
-    coin:"🪙",
-    gem:"💎",
-    enemy:"👾",
-    player:"🙂",
-    heart:"❤️",
-    star:"⭐"
-  }[name] || "🎯"
-
-  const svg =
-    "<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>"+
-    "<rect width='100%' height='100%' rx='12' fill='#f5f5f5'/>"+
-    "<text x='50%' y='55%' font-size='40' text-anchor='middle'>"+
-    emoji+
-    "</text></svg>"
-
-  return "data:image/svg+xml;base64,"+btoa(svg)
+  d.onclick=()=>{score++;update()}
+  game.appendChild(d);objs[name]=d
 }
 
-/* ---------- MOVEMENT ---------- */
-window.onkeydown=e=>keys[e.key]=true
-window.onkeyup=e=>keys[e.key]=false
+function spawnEnemy(){
+  const e=document.createElement("div")
+  e.className="obj enemy"
+  e.style.background=`url(${img("👾")}) center/contain no-repeat`
+  e.style.left=Math.random()*80+"%"
+  e.style.top=Math.random()*80+"%"
+  game.appendChild(e);enemies.push(e)
+}
+
 setInterval(()=>{
-  // PLAYER MOVE
-  if(objs.player && rulesArr.includes("move arrows")){
-    let p=objs.player,x=p.offsetLeft,y=p.offsetTop
-    if(keys.ArrowLeft)x-=5;if(keys.ArrowRight)x+=5;if(keys.ArrowUp)y-=5;if(keys.ArrowDown)y+=5
-    p.style.left=x+"px";p.style.top=y+"px"
-  }
-  // ENEMY CHASE
   if(objs.player){
     enemies.forEach(en=>{
       let ex=en.offsetLeft,ey=en.offsetTop
       let px=objs.player.offsetLeft,py=objs.player.offsetTop
-      if(ex<px)ex+=2;if(ex>px)ex-=2
-      if(ey<py)ey+=2;if(ey>py)ey-=2
-      en.style.left=ex+"px";en.style.top=ey+"px"
-      if(Math.abs(ex-px)<40&&Math.abs(ey-py)<40){health-=1}
+      en.style.left=ex+(px>ex?2:-2)+"px"
+      en.style.top=ey+(py>ey?2:-2)+"px"
+      if(Math.abs(px-ex)<32&&Math.abs(py-ey)<32)health--
     })
   }
-  if(timeLeft>0){timeLeft--;update()}
+  update()
 },100)
 
-/* ---------- UPDATE ---------- */
 function update(){
-  if(health<=0){stats.innerText="GAME OVER";show("Game Over");return}
-  if(score>=win){stats.innerText="YOU WIN 🎉";show("You Win!");return}
-  stats.innerText=`Score: ${score}/${win} | Health: ${health}${timeLeft?" | Time: "+timeLeft:""}`
+  if(health<=0){stats.innerText="GAME OVER";return}
+  if(score>=win){stats.innerText="YOU WIN";return}
+  stats.innerText=`Score ${score}/${win} | Health ${health}`
 }
 
-/* ---------- SMART AI ---------- */
+function parseNum(t){
+  let m=t.match(/(\d+)(k)?/)
+  return m?parseInt(m[1])*(m[2]?1000:1):10
+}
+
 function aiGame(){
-  const t = aiInput.value.toLowerCase()
-  let out = []
-
-  // Always playable
-  out.push("spawn player","move arrows")
-
-  // Objects (AI guesses)
-  if(/coin|money|gold/.test(t)){
-    let m=t.match(/(\d+)/)
-    let gain=m?parseInt(m[1]):1
-    out.push("spawn coin","click coin gain "+gain)
-  }
-
-  if(/gem|diamond|crystal/.test(t)){
-    out.push("spawn gem","click gem gain 3")
-  }
-
-  // Enemies
-  if(/enemy|monster|bad|evil/.test(t)){
-    out.push("enemy")
-  }
-
-  // Health
-  if(/health|life/.test(t)){
-    let m=t.match(/health[^0-9]*(\d+)/)
-    out.push("health "+(m?parseInt(m[1]):100))
-  }
-
-  // Time
-  if(/time|timer|seconds/.test(t)){
-    let m=t.match(/(\d+)/)
-    out.push("timer "+(m?parseInt(m[1]):30))
-  }
-
-  // Win score (supports 1k, 100k, etc)
-  let w=10
-  let m=t.match(/(\d+)\s*(k|m)?/)
-  if(m){
-    w=parseInt(m[1])
-    if(m[2]=="k") w*=1000
-    if(m[2]=="m") w*=1000000
-  }
-
-  out.push("score to win "+w)
-
+  let t=aiInput.value.toLowerCase()
+  let out=["spawn player"]
+  if(t.includes("enemy"))out.push("enemy")
+  if(t.includes("coin"))out.push("spawn coin")
+  out.push("win "+(parseNum(t)||10))
   rulesBox.value=out.join("\n")
   buildGame()
-  show("AI created a full playable game")
+  show("Game created by AI")
 }
 
-/* ---------- SAVE ---------- */
-function getGames(){return JSON.parse(localStorage.getItem("games")||"[]")}
-function setGames(g){localStorage.setItem("games",JSON.stringify(g))}
-function saveGame(){const n=prompt("Game name","My Game");if(!n)return;const g=getGames();g.push({id:Date.now(),name:n,rules:rulesBox.value});setGames(g);loadGames();show("Saved")}
-function loadGames(){lib.innerHTML="";getGames().forEach(g=>{const r=document.createElement("div");r.className="row";r.innerHTML="<b>"+g.name+"</b>";r.append(btn("Play",()=>{rulesBox.value=g.rules;buildGame()}),btn("Rename",()=>{const n=prompt("New name",g.name);if(n){g.name=n;setGames(getGames());loadGames()}}),btn("Delete",()=>{if(confirm("Delete?")){setGames(getGames().filter(x=>x.id!==g.id));loadGames()}}));lib.appendChild(r)})}
-function btn(t,f){const b=document.createElement("button");b.className="small";b.innerText=t;b.onclick=f;return b}
+function saveGame(){
+  let n=prompt("Name game")
+  if(!n)return
+  let g=JSON.parse(localStorage.getItem("games")||"[]")
+  g.push({id:Date.now(),name:n,rules:rulesBox.value})
+  localStorage.setItem("games",JSON.stringify(g))
+  loadGames()
+}
+
+function loadGames(){
+  lib.innerHTML=""
+  JSON.parse(localStorage.getItem("games")||"[]").forEach(g=>{
+    let d=document.createElement("div")
+    d.className="row"
+    d.innerHTML=`<b>${g.name}</b>`
+    d.append(btn("Play",()=>{rulesBox.value=g.rules;buildGame()}))
+    d.append(btn("Rename",()=>{g.name=prompt(\"New name\",g.name);saveAll()}))
+    d.append(btn("Delete",()=>{saveAll(x=>x.id!==g.id)}))
+    lib.appendChild(d)
+  })
+}
+function saveAll(f){
+  let g=JSON.parse(localStorage.getItem("games")||"[]")
+  localStorage.setItem("games",JSON.stringify(f?g.filter(f):g))
+  loadGames()
+}
+function btn(t,f){let b=document.createElement("button");b.className="small";b.innerText=t;b.onclick=f;return b}
 loadGames()
 
-/* ---------- SHARE ---------- */
-function copyLink(){const d=btoa(unescape(encodeURIComponent(rulesBox.value)));navigator.clipboard.writeText(location.origin+location.pathname+"?g="+d);show("Link copied")}
-const q=new URLSearchParams(location.search);if(q.has("g")){try{rulesBox.value=decodeURIComponent(escape(atob(q.get("g"))));buildGame()}catch{}}
-
-
-/* ---------- ROBLOX EXPORT ---------- */
-function exportRoblox(){
-  let lua=`-- Instant Game Builder (Generated)
-`;
-  lua+=`local Players = game:GetService("Players")
-`;
-  lua+=`local player = Players.LocalPlayer
-`;
-  lua+=`local score = 0
-local health = 100
-`;
-  lua+=`local winScore = ${win}
-`;
-
-  lua+=`local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-`;
-  lua+=`local frame = Instance.new("Frame", gui)
-`;
-  lua+=`frame.Size = UDim2.fromScale(0.6,0.6)
-frame.Position = UDim2.fromScale(0.2,0.2)
-`;
-
-  lua+=`local label = Instance.new("TextLabel", frame)
-`;
-  lua+=`label.Size = UDim2.fromScale(1,0.3)
-label.TextScaled = true
-`;
-
-  lua+=`local btn = Instance.new("TextButton", frame)
-`;
-  lua+=`btn.Size = UDim2.fromScale(1,0.3)
-btn.Position = UDim2.fromScale(0,0.4)
-btn.Text = "Play"
-`;
-
-  lua+=`btn.MouseButton1Click:Connect(function()
-`;
-  lua+=`  score = score + 1
-`;
-  lua+=`  label.Text = "Score: "..score.." / "..winScore
-`;
-  lua+=`  if score >= winScore then label.Text = "YOU WIN" end
-`;
-  lua+=`end)
-`;
-
-  download(lua,"InstantGame.lua")
+function copyLink(){
+  navigator.clipboard.writeText(location.href)
+  show("Link copied")
 }
 
-function download(data,name){
+function exportRoblox(){
+  const lua=`print('Instant Game Builder Export')`
   const a=document.createElement("a")
-  a.href=URL.createObjectURL(new Blob([data],{type:"text/plain"}))
-  a.download=name
+  a.href=URL.createObjectURL(new Blob([lua],{type:"text/plain"}))
+  a.download="InstantGame.lua"
   a.click()
 }
-
 </script>
 </body>
 </html>
