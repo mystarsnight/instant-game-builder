@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>Instant Game Builder</title>
@@ -8,37 +8,30 @@
 body{margin:0;font-family:Arial;background:#b3d9ff}
 #app{max-width:900px;margin:auto;background:#fff;padding:12px;border-radius:12px}
 textarea,button{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
-button{background:#4caf50;color:#fff;border:none}
+button{background:#4caf50;color:#fff;border:none;cursor:pointer}
 button.small{width:auto;padding:6px 10px;font-size:12px}
 #game{height:320px;background:#e3f2fd;border-radius:10px;position:relative;overflow:hidden}
-.obj{width:60px;height:60px;border-radius:12px;position:absolute;
-display:flex;align-items:center;justify-content:center;
-color:#fff;font-weight:bold;user-select:none}
-.row{display:flex;gap:6px;background:#eee;padding:6px;border-radius:6px;margin:4px 0}
+.obj{
+  width:60px;height:60px;border-radius:12px;
+  position:absolute;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:bold;user-select:none;cursor:pointer
+}
+.row{display:flex;gap:6px;background:#eee;padding:6px;border-radius:6px;margin:4px 0;flex-wrap:wrap}
 #notice{background:#222;color:#fff;padding:8px;border-radius:6px;display:none}
-
-/* MODAL */
 #overlay{
   position:fixed;inset:0;background:rgba(0,0,0,.6);
-  display:none;align-items:center;justify-content:center;z-index:999;
+  display:none;align-items:center;justify-content:center;z-index:999
 }
 #modal{background:#fff;padding:20px;border-radius:12px;max-width:320px;text-align:center}
-#modal button{margin-top:10px}
-
-/* MOBILE AI BOX */
-#mobileAI{
-  display:none;background:#e8f5e9;padding:12px;border-radius:10px;margin-bottom:10px
-}
+#mobileAI{display:none;background:#e8f5e9;padding:10px;border-radius:10px;margin-bottom:10px}
 </style>
 </head>
 <body>
 
-<!-- FIRST VISIT POPUP -->
 <div id="overlay">
   <div id="modal">
     <h3>Welcome 👋</h3>
-    <p>You need to use <b>AI</b> to make a game right now.<br>
-    Tap <b>AI Make Game</b> to start.</p>
+    <p>You must use <b>AI</b> to generate a game.</p>
     <button onclick="dismiss()">OK</button>
   </div>
 </div>
@@ -46,17 +39,14 @@ color:#fff;font-weight:bold;user-select:none}
 <div id="app">
 <h2>Instant Game Builder</h2>
 
-<div id="mobileAI">
-  <b>📱 Mobile Tip</b><br>
-  Tap <b>AI Make Game</b> to instantly create a game.
-</div>
+<div id="mobileAI">📱 Mobile: Use <b>AI Make Game</b> to start</div>
 
 <div id="notice"></div>
 
 <textarea id="rules" rows="6"></textarea>
 
-<button onclick="buildGame()">Build & Play</button>
 <button onclick="aiGame()">🤖 AI Make Game</button>
+<button onclick="buildGame()">▶ Build & Play</button>
 <button onclick="saveGame()">💾 Save</button>
 <button onclick="copyLink()">🔗 Copy Link</button>
 
@@ -68,26 +58,34 @@ color:#fff;font-weight:bold;user-select:none}
 </div>
 
 <script>
-/* ---------- FIRST VISIT ---------- */
-function dismiss(){
-  overlay.style.display="none"
-  localStorage.setItem("aiNoticeSeen","1")
-}
-if(!localStorage.getItem("aiNoticeSeen")){
-  overlay.style.display="flex"
-}
-if(/Mobi|Android/i.test(navigator.userAgent)){
-  mobileAI.style.display="block"
-}
-
-/* ---------- BASIC ---------- */
-const rulesBox=rules
+/* ---------- STARTUP ---------- */
+const rulesBox=document.getElementById("rules")
 const game=document.getElementById("game")
 const stats=document.getElementById("stats")
 const lib=document.getElementById("library")
 const notice=document.getElementById("notice")
-function msg(t){notice.innerText=t;notice.style.display="block";setTimeout(()=>notice.style.display="none",2000)}
+const overlay=document.getElementById("overlay")
+const mobileAI=document.getElementById("mobileAI")
 
+function show(msg){
+  notice.innerText=msg
+  notice.style.display="block"
+  setTimeout(()=>notice.style.display="none",2200)
+}
+
+if(!localStorage.getItem("aiSeen")){
+  overlay.style.display="flex"
+}
+function dismiss(){
+  overlay.style.display="none"
+  localStorage.setItem("aiSeen","1")
+}
+
+if(/Mobi|Android/i.test(navigator.userAgent)){
+  mobileAI.style.display="block"
+}
+
+/* ---------- GAME STATE ---------- */
 let rulesArr=[],objs={},score=0,win=5,keys={}
 
 /* ---------- BUILD ---------- */
@@ -96,17 +94,20 @@ function buildGame(){
   objs={}
   score=0
   win=5
-  rulesArr=rulesBox.value.split("\n").map(r=>r.trim()).filter(Boolean)
+  rulesArr=rulesBox.value.split("\n").map(x=>x.trim()).filter(Boolean)
 
   rulesArr.forEach(r=>{
     if(r.startsWith("spawn ")) spawn(r.split(" ")[1])
-    if(r.startsWith("score to win")) win=parseInt(r.split(" ").pop())||5
+    if(r.startsWith("score to win")){
+      win=parseInt(r.replace(/\D/g,""))||5
+    }
   })
   update()
 }
 
-/* ---------- OBJECTS ---------- */
+/* ---------- OBJECT ---------- */
 function spawn(name){
+  if(objs[name]) return
   const d=document.createElement("div")
   d.className="obj"
   d.style.left=Math.random()*80+"%"
@@ -117,7 +118,7 @@ function spawn(name){
   d.onclick=()=>{
     rulesArr.forEach(r=>{
       if(r.startsWith("click "+name) && r.includes("gain")){
-        score+=parseInt(r.split("gain")[1])||1
+        score+=parseInt(r.replace(/\D/g,""))||1
       }
     })
     update()
@@ -129,13 +130,14 @@ function spawn(name){
 
 function color(n){
   const c=["#e53935","#1e88e5","#43a047","#fb8c00","#8e24aa"]
-  let h=0;for(let x of n)h+=x.charCodeAt(0)
+  let h=0;for(let i of n)h+=i.charCodeAt(0)
   return c[h%c.length]
 }
 
 /* ---------- MOVEMENT ---------- */
 window.onkeydown=e=>keys[e.key]=true
 window.onkeyup=e=>keys[e.key]=false
+
 setInterval(()=>{
   if(objs.player && rulesArr.includes("move arrows")){
     let p=objs.player
@@ -152,36 +154,38 @@ setInterval(()=>{
 function update(){
   if(score>=win){
     stats.innerText="YOU WIN 🎉"
-    msg("You win!")
+    show("You win!")
   }else{
     stats.innerText=`Score: ${score} / ${win}`
   }
 }
 
-/* ---------- REAL AI (VARIATION) ---------- */
+/* ---------- REAL AI (FIXED) ---------- */
 function aiGame(){
-  const winTarget=Math.floor(Math.random()*10)+3
-  const gain=Math.floor(Math.random()*3)+1
-  const withMove=Math.random()>0.4
-  const extra=Math.random()>0.6
+  const winTarget=Math.floor(Math.random()*8)+4
+  const gain1=Math.floor(Math.random()*3)+1
+  const gain2=gain1+1
 
-  let out=["spawn player"]
-  if(withMove) out.push("move arrows")
-  out.push("spawn coin")
-  out.push(`click coin gain ${gain}`)
+  let out=[
+    "spawn player",
+    "move arrows",
+    "spawn coin",
+    `click coin gain ${gain1}`
+  ]
 
-  if(extra){
+  if(Math.random()>0.5){
     out.push("spawn gem")
-    out.push(`click gem gain ${gain+1}`)
+    out.push(`click gem gain ${gain2}`)
   }
 
   out.push(`score to win ${winTarget}`)
+
   rulesBox.value=out.join("\n")
   buildGame()
-  msg("AI generated a new game")
+  show("AI generated a new game")
 }
 
-/* ---------- SAVE ---------- */
+/* ---------- SAVE SYSTEM ---------- */
 function getGames(){return JSON.parse(localStorage.getItem("games")||"[]")}
 function setGames(g){localStorage.setItem("games",JSON.stringify(g))}
 
@@ -190,7 +194,9 @@ function saveGame(){
   if(!name) return
   const g=getGames()
   g.push({id:Date.now(),name,rules:rulesBox.value})
-  setGames(g);loadGames();msg("Saved")
+  setGames(g)
+  loadGames()
+  show("Saved")
 }
 
 function loadGames(){
@@ -206,8 +212,9 @@ function loadGames(){
         if(n){g.name=n;setGames(getGames());loadGames()}
       }),
       btn("Delete",()=>{
-        if(confirm("Delete?")){
-          setGames(getGames().filter(x=>x.id!==g.id));loadGames()
+        if(confirm("Delete game?")){
+          setGames(getGames().filter(x=>x.id!==g.id))
+          loadGames()
         }
       })
     )
@@ -217,16 +224,20 @@ function loadGames(){
 function btn(t,f){const b=document.createElement("button");b.className="small";b.innerText=t;b.onclick=f;return b}
 loadGames()
 
-/* ---------- SHARE ---------- */
+/* ---------- SHARE LINK (FIXED) ---------- */
 function copyLink(){
-  const d=btoa(encodeURIComponent(rulesBox.value))
-  navigator.clipboard.writeText(location.origin+location.pathname+"?g="+d)
-  msg("Link copied")
+  const data=btoa(unescape(encodeURIComponent(rulesBox.value)))
+  const url=location.origin+location.pathname+"?g="+data
+  navigator.clipboard.writeText(url)
+  show("Link copied")
 }
+
 const q=new URLSearchParams(location.search)
 if(q.has("g")){
-  rulesBox.value=decodeURIComponent(atob(q.get("g")))
-  buildGame()
+  try{
+    rulesBox.value=decodeURIComponent(escape(atob(q.get("g"))))
+    buildGame()
+  }catch(e){}
 }
 </script>
 </body>
