@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <title>Instant Game Builder</title>
@@ -7,218 +7,195 @@
 <style>
 body{font-family:Arial;background:#b3d9ff;margin:0;padding:10px}
 #app{background:#fff;border-radius:12px;padding:12px;max-width:900px;margin:auto}
-textarea,button,input{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
-button{background:#4caf50;color:#fff;border:none;cursor:pointer}
-button.small{width:auto;padding:6px 10px;font-size:12px;margin-left:4px}
-#gameArea{margin-top:15px;height:350px;border-radius:10px;background:#e3f2fd;position:relative;overflow:hidden}
-.obj{position:absolute;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#fff;cursor:pointer;user-select:none}
-#stats{margin-top:10px;font-weight:bold}
-.listItem{padding:6px;background:#eee;margin:4px 0;border-radius:6px}
-.notice{background:#222;color:#fff;padding:10px;border-radius:8px;margin:6px 0;display:none}
-.row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+textarea,button{width:100%;padding:10px;margin:6px 0;border-radius:8px}
+button{background:#4caf50;color:#fff;border:none}
+#game{height:320px;background:#e3f2fd;border-radius:10px;position:relative;overflow:hidden}
+.obj{position:absolute;width:50px;height:50px;border-radius:10px;
+display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold}
+#stats{margin-top:6px;font-weight:bold}
+.notice{display:none;background:#222;color:#fff;padding:8px;border-radius:6px}
+#mobile{text-align:center;margin-top:6px}
+#mobile button{width:60px}
 </style>
 </head>
 <body>
 
 <div id="app">
 <h2>Instant Game Builder</h2>
-
 <div id="notice" class="notice"></div>
 
-<h3>Game Rules</h3>
-<textarea id="input" rows="6" placeholder="Example:
-spawn player
-spawn coin
-click coin gain 1
-score to win 5
-press arrow move player"></textarea>
+<textarea id="input" rows="5" placeholder="Describe your game or write rules"></textarea>
 
-<button onclick="buildGame()">Build & Play</button>
-<button onclick="saveGame()">Save</button>
-<button onclick="shareGame()">Share</button>
+<button onclick="aiMakeGame()">🤖 AI Make Game</button>
+<button onclick="build()">▶ Play</button>
+<button onclick="exportRoblox()">🎮 Export Roblox World</button>
 
-<div id="gameArea"></div>
+<div id="game"></div>
 <div id="stats"></div>
 
-<h3>My Games</h3>
-<div id="myGames"></div>
+<div id="mobile">
+<button onclick="mv(0,-6)">⬆</button><br>
+<button onclick="mv(-6,0)">⬅</button>
+<button onclick="mv(0,6)">⬇</button>
+<button onclick="mv(6,0)">➡</button>
+</div>
 </div>
 
 <script>
-// ===== HELPERS =====
-const notice=document.getElementById('notice')
-function show(msg){
-  notice.innerText=msg
-  notice.style.display='block'
-  setTimeout(()=>notice.style.display='none',2500)
-}
-
-const gameArea=document.getElementById('gameArea')
-const stats=document.getElementById('stats')
+const game=document.getElementById('game')
 const input=document.getElementById('input')
-const myGames=document.getElementById('myGames')
+const stats=document.getElementById('stats')
+const notice=document.getElementById('notice')
 
-// ===== GAME STATE =====
-let rules=[],objects={},score=0,winScore=5,keys={}
+let rules=[],objs={},score=0,win=10,health=3,keys={}
 
-// ===== GAME ENGINE =====
-function buildGame(){
-  gameArea.innerHTML=''
-  objects={}
-  score=0
-  winScore=5
+function msg(t){notice.innerText=t;notice.style.display='block';setTimeout(()=>notice.style.display='none',2500)}
 
-  rules=input.value.split('\n').map(r=>r.trim()).filter(Boolean)
+/* ===== SMART AI ===== */
+function aiMakeGame(){
+ const p=prompt("Describe your game")
+ if(!p) return
+ const t=p.toLowerCase()
+ let r=[]
 
-  rules.forEach(r=>{
-    if(r.startsWith('spawn ')) spawn(r.split(' ')[1])
-    if(r.startsWith('score to win')) winScore=parseInt(r.split(' ').pop())||5
-  })
+ r.push("spawn player")
+ r.push("press arrow move player")
+
+ if(t.match(/coin|gem|collect|point/)){
+  r.push("spawn coin")
+  r.push("click coin gain 1")
+ }
+
+ if(t.match(/enemy|monster|avoid|dodge/)){
+  r.push("spawn enemy")
+  r.push("enemy follow player")
+  r.push("touch enemy lose 1")
+ }
+
+ if(t.match(/survive|time/)){
+  r.push("timer 60")
+  r.push("survive to win")
+ }
+
+ const n=t.match(/\d+/)
+ r.push("score to win "+(n?n[0]:10))
+
+ input.value=r.join("\n")
+ build()
+ msg("AI built a working game")
+}
+
+/* ===== GAME ENGINE ===== */
+function build(){
+ game.innerHTML=''
+ objs={}
+ score=0;health=3;win=10
+
+ rules=input.value.split("\n").map(x=>x.trim()).filter(Boolean)
+
+ rules.forEach(r=>{
+  if(r.startsWith("spawn")) spawn(r.split(" ")[1])
+  if(r.startsWith("score to win")) win=parseInt(r.split(" ").pop())
+ })
+ update()
+}
+
+function spawn(n){
+ const d=document.createElement("div")
+ d.className="obj"
+ d.innerText=n[0].toUpperCase()
+ d.style.background=color(n)
+ d.style.left=Math.random()*80+"%"
+ d.style.top=Math.random()*80+"%"
+ game.appendChild(d)
+ objs[n]=d
+
+ d.onclick=()=>{
+  if(rules.includes("click "+n+" gain 1")) score++
   update()
+ }
 }
 
-function spawn(name){
-  const d=document.createElement('div')
-  d.className='obj'
-  d.style.width='64px'
-  d.style.height='64px'
-  d.style.borderRadius='12px'
-  d.style.backgroundImage=`url(${generateAIImage(name)})`
-  d.style.backgroundSize='cover'
-  d.style.backgroundPosition='center'
-  d.style.left=Math.random()*80+'%'
-  d.style.top=Math.random()*80+'%'
-  d.title=name
-
-  d.onclick=()=>{
-    rules.forEach(r=>{
-      if(r.startsWith('click '+name) && r.includes('gain')){
-        const v=parseInt(r.split('gain')[1])||1
-        score+=v
-      }
-    })
-    update()
-  }
-
-  gameArea.appendChild(d)
-  objects[name]=d
+function color(t){
+ const c=["#f44336","#2196f3","#4caf50","#ff9800","#9c27b0"]
+ let h=0;for(let i of t)h+=i.charCodeAt(0)
+ return c[h%c.length]
 }
 
-function generateAIImage(name){
-  const colors=['#ef5350','#42a5f5','#66bb6a','#ffa726','#ab47bc']
-  let h=0;for(let i=0;i<name.length;i++)h+=name.charCodeAt(i)
-  const c=colors[h%colors.length]
-  const letter=name[0].toUpperCase()
-  const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>
-  <rect rx='12' width='100%' height='100%' fill='${c}'/>
-  <text x='50%' y='55%' font-size='32' fill='white' text-anchor='middle'>${letter}</text>
-  </svg>`
-  return 'data:image/svg+xml;base64,'+btoa(svg)
-}
+setInterval(()=>{
+ if(objs.player && rules.includes("press arrow move player")){
+  let p=objs.player
+  if(keys.ArrowLeft)p.style.left=p.offsetLeft-5+"px"
+  if(keys.ArrowRight)p.style.left=p.offsetLeft+5+"px"
+  if(keys.ArrowUp)p.style.top=p.offsetTop-5+"px"
+  if(keys.ArrowDown)p.style.top=p.offsetTop+5+"px"
+ }
+ if(objs.enemy && rules.includes("enemy follow player")){
+  let e=objs.enemy,p=objs.player
+  e.style.left=e.offsetLeft+(p.offsetLeft>e.offsetLeft?1:-1)+"px"
+  e.style.top=e.offsetTop+(p.offsetTop>e.offsetTop?1:-1)+"px"
+ }
+},40)
 
-// ===== MOVEMENT =====
 window.onkeydown=e=>keys[e.key]=true
 window.onkeyup=e=>keys[e.key]=false
 
-setInterval(()=>{
-  if(objects.player && rules.includes('press arrow move player')){
-    const p=objects.player
-    let x=p.offsetLeft,y=p.offsetTop
-    if(keys.ArrowLeft)x-=5
-    if(keys.ArrowRight)x+=5
-    if(keys.ArrowUp)y-=5
-    if(keys.ArrowDown)y+=5
-    p.style.left=x+'px'
-    p.style.top=y+'px'
-  }
-},40)
+function mv(x,y){
+ if(objs.player){
+  objs.player.style.left=objs.player.offsetLeft+x+"px"
+  objs.player.style.top=objs.player.offsetTop+y+"px"
+ }
+}
 
 function update(){
-  if(score>=winScore){
-    stats.innerText='YOU WIN 🎉'
-    show('You win!')
-  }else{
-    stats.innerText='Score: '+score+' / '+winScore
-  }
+ if(score>=win){
+  stats.innerText="YOU WIN 🎉"
+ }else{
+  stats.innerText=`Score: ${score}/${win}`
+ }
 }
 
-// ===== LOCAL SAVE (WITH RENAME + DELETE) =====
-function saveGame(){
-  const name=prompt('Game name?','My Game')
-  if(!name) return
-  const games=JSON.parse(localStorage.getItem('games')||'[]')
-  games.push({name, rules: input.value})
-  localStorage.setItem('games',JSON.stringify(games))
-  show('Saved')
-  loadGames()
-}
+/* ===== ROBLOX WORLD EXPORT ===== */
+function exportRoblox(){
+ let lua=`
+-- AUTO GENERATED ROBLOX WORLD
+local Players=game:GetService("Players")
 
-function loadGames(){
-  myGames.innerHTML=''
-  const games=JSON.parse(localStorage.getItem('games')||'[]')
+local function makePart(name,color,pos)
+ local p=Instance.new("Part")
+ p.Name=name
+ p.Size=Vector3.new(4,4,4)
+ p.Position=pos
+ p.Anchored=true
+ p.Color=color
+ p.Parent=workspace
+ return p
+end
 
-  games.forEach((g,i)=>{
-    const d=document.createElement('div')
-    d.className='listItem'
+local coin=makePart("Coin",Color3.new(1,1,0),Vector3.new(0,4,0))
+coin.Touched:Connect(function(hit)
+ local hum=hit.Parent:FindFirstChild("Humanoid")
+ if hum then
+  print("Coin collected")
+  coin:Destroy()
+ end
+end)
 
-    const row=document.createElement('div')
-    row.className='row'
+local enemy=makePart("Enemy",Color3.new(1,0,0),Vector3.new(20,4,0))
 
-    const title=document.createElement('span')
-    title.innerText=g.name
-
-    const play=document.createElement('button')
-    play.className='small'
-    play.innerText='Play'
-    play.onclick=()=>{
-      input.value=g.rules
-      buildGame()
-    }
-
-    const rename=document.createElement('button')
-    rename.className='small'
-    rename.innerText='Rename'
-    rename.onclick=()=>{
-      const n=prompt('New name:',g.name)
-      if(n){
-        games[i].name=n
-        localStorage.setItem('games',JSON.stringify(games))
-        loadGames()
-      }
-    }
-
-    const del=document.createElement('button')
-    del.className='small'
-    del.innerText='Delete'
-    del.onclick=()=>{
-      if(confirm('Delete this game?')){
-        games.splice(i,1)
-        localStorage.setItem('games',JSON.stringify(games))
-        loadGames()
-      }
-    }
-
-    row.append(title,play,rename,del)
-    d.appendChild(row)
-    myGames.appendChild(d)
-  })
-}
-loadGames()
-
-// ===== SHARE =====
-function shareGame(){
-  const data=btoa(encodeURIComponent(input.value))
-  navigator.clipboard.writeText(location.origin+location.pathname+'?game='+data)
-  show('Link copied')
-}
-
-// ===== LOAD SHARED =====
-const q=new URLSearchParams(location.search)
-if(q.has('game')){
-  input.value=decodeURIComponent(atob(q.get('game')))
-  buildGame()
+game:GetService("RunService").Heartbeat:Connect(function()
+ for _,plr in pairs(Players:GetPlayers()) do
+  if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+   enemy.Position=enemy.Position:Lerp(plr.Character.HumanoidRootPart.Position,0.01)
+  end
+ end
+end)
+`
+ const a=document.createElement("a")
+ a.href=URL.createObjectURL(new Blob([lua],{type:"text/plain"}))
+ a.download="RobloxWorld.lua"
+ a.click()
 }
 </script>
-
 </body>
 </html>
