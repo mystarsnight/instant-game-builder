@@ -2,124 +2,126 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Instant Game Builder (Supabase)</title>
+<title>Instant Game Builder</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{font-family:Arial;background:#b3d9ff;margin:0;padding:10px}
 #app{background:#fff;border-radius:12px;padding:12px;max-width:900px;margin:auto}
-textarea,button,input{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
+textarea,button{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
 button{background:#4caf50;color:#fff;border:none;cursor:pointer}
 #gameArea{margin-top:15px;height:350px;border-radius:10px;background:#e3f2fd;position:relative;overflow:hidden}
-.obj{position:absolute;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#fff;cursor:pointer;user-select:none}
+.obj{position:absolute;width:64px;height:64px;border-radius:12px;cursor:pointer;background-size:cover;background-position:center}
 #stats{margin-top:10px;font-weight:bold}
 .listItem{padding:6px;background:#eee;margin:4px 0;border-radius:6px;cursor:pointer}
 .notice{background:#222;color:#fff;padding:10px;border-radius:8px;margin:6px 0;display:none}
-.admin{background:#ffebee;border:2px solid #e53935;padding:8px;border-radius:8px;margin-top:10px}
-.small{font-size:12px;color:#555}
 </style>
 </head>
 <body>
+
 <div id="app">
 <h2>Instant Game Builder</h2>
 
-
 <div id="notice" class="notice"></div>
 
-
-
 <h3>Game Rules</h3>
-<textarea id="input" rows="6"></textarea>
+<textarea id="input" rows="6" placeholder="
+spawn player
+spawn coin
+click coin gain 1
+score to win 10
+press arrow move player
+"></textarea>
 
 <button onclick="buildGame()">Build & Play</button>
-<button onclick="saveGame()">Save</button>
-<button onclick="publishGame()">Publish</button>
-<button onclick="shareGame()">Share</button>
-
+<button onclick="saveGame()">Save (Local)</button>
+<button onclick="shareGame()">Copy Share Link</button>
 
 <div id="gameArea"></div>
 <div id="stats"></div>
 
-<h3>My Games</h3>
+<h3>My Games (Local)</h3>
 <div id="myGames"></div>
-
-<h3>Public Games</h3>
-<div id="publicGames"></div>
-
-
-</div>
 </div>
 
-<script type="module">
-// Standalone version – no accounts, no backend
+<script>
+const notice=document.getElementById('notice')
+function show(msg){notice.innerText=msg;notice.style.display='block';setTimeout(()=>notice.style.display='none',2500)}
 
-function show(msg){ notice.innerText=msg; notice.style.display='block'; setTimeout(()=>notice.style.display='none',3000) }
-
-
-}
-
-// ===== GAME ENGINE =====
 let rules=[],objects={},score=0,winScore=999,keys={}
-window.buildGame=()=>{
-  gameArea.innerHTML=''; objects={}; score=0
-  rules=input.value.split('\n').filter(Boolean)
-  rules.forEach(r=>{ if(r.startsWith('spawn')) spawn(r.split(' ')[1]); if(r.startsWith('score to win')) winScore=parseInt(r.split(' ').pop()) })
+
+function buildGame(){
+  gameArea.innerHTML=''
+  objects={}
+  score=0
+  winScore=999
+  rules=input.value.split('\n').map(l=>l.trim()).filter(Boolean)
+
+  rules.forEach(r=>{
+    if(r.startsWith('spawn')) spawn(r.split(' ')[1])
+    if(r.startsWith('score to win')) winScore=parseInt(r.split(' ').pop())
+  })
   update()
 }
 
-function spawn(n){
+function spawn(name){
   const d=document.createElement('div')
   d.className='obj'
-  d.style.width='64px'
-  d.style.height='64px'
-  d.style.borderRadius='12px'
-  d.style.backgroundImage=`url(${generateAIImage(n)})`
-  d.style.backgroundSize='cover'
-  d.style.backgroundPosition='center'
-  d.title=n
+  d.style.backgroundImage=`url(${generateAIImage(name)})`
   d.style.left=Math.random()*80+'%'
   d.style.top=Math.random()*80+'%'
   d.onclick=()=>{
     rules.forEach(r=>{
-      if(r.startsWith('click '+n)&&r.includes('gain')){
+      if(r.startsWith('click '+name)&&r.includes('gain')){
         score+=parseInt(r.split('gain')[1])
       }
     })
     update()
   }
   gameArea.appendChild(d)
-  objects[n]=d
+  objects[name]=d
 }
 
 function generateAIImage(name){
-  // deterministic "AI-style" avatar using SVG
   const colors=['#ef5350','#42a5f5','#66bb6a','#ffa726','#ab47bc']
-  let hash=0; for(let i=0;i<name.length;i++) hash+=name.charCodeAt(i)
-  const c=colors[hash%colors.length]
-  const letter=name[0].toUpperCase()
+  let h=0;for(let i=0;i<name.length;i++)h+=name.charCodeAt(i)
+  const c=colors[h%colors.length]
+  const l=name[0].toUpperCase()
   const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>
-    <rect width='100%' height='100%' rx='12' fill='${c}'/>
-    <text x='50%' y='55%' text-anchor='middle' font-size='32' fill='white' font-family='Arial'>${letter}</text>
+  <rect width='100%' height='100%' rx='12' fill='${c}'/>
+  <text x='50%' y='55%' text-anchor='middle' font-size='32' fill='white' font-family='Arial'>${l}</text>
   </svg>`
   return 'data:image/svg+xml;base64,'+btoa(svg)
 }
 
 window.onkeydown=e=>keys[e.key]=true
 window.onkeyup=e=>keys[e.key]=false
+
 setInterval(()=>{
   if(objects.player && rules.includes('press arrow move player')){
-    const p=objects.player; let x=p.offsetLeft,y=p.offsetTop
-    if(keys.ArrowLeft)x-=5;if(keys.ArrowRight)x+=5;if(keys.ArrowUp)y-=5;if(keys.ArrowDown)y+=5
-    p.style.left=x+'px'; p.style.top=y+'px'
-    syncPlayer()
+    let p=objects.player
+    let x=p.offsetLeft,y=p.offsetTop
+    if(keys.ArrowLeft)x-=5
+    if(keys.ArrowRight)x+=5
+    if(keys.ArrowUp)y-=5
+    if(keys.ArrowDown)y+=5
+    p.style.left=x+'px'
+    p.style.top=y+'px'
   }
 },40)
 
-function update(){ if(score>=winScore){ stats.innerText='YOU WIN'; show('You win') } else stats.innerText='Score: '+score }
+function update(){
+  if(score>=winScore){
+    stats.innerText='YOU WIN 🎉'
+    show('You win!')
+  }else{
+    stats.innerText='Score: '+score+' / '+winScore
+  }
+}
 
-// ===== LOCAL SAVE / LOAD (NO ACCOUNT NEEDED) =====
-window.saveGame=()=>{
+// ===== LOCAL SAVE =====
+function saveGame(){
   const games=JSON.parse(localStorage.getItem('myGames')||'[]')
-  games.push({rules:input.value,created:Date.now()})
+  games.push({rules:input.value})
   localStorage.setItem('myGames',JSON.stringify(games))
   show('Saved locally')
   loadMyGames()
@@ -131,26 +133,25 @@ function loadMyGames(){
   games.forEach((g,i)=>{
     const d=document.createElement('div')
     d.className='listItem'
-    d.innerText='Local Game '+(i+1)
-    d.onclick=()=>{ input.value=g.rules; buildGame() }
+    d.innerText='Game '+(i+1)
+    d.onclick=()=>{input.value=g.rules;buildGame()}
     myGames.appendChild(d)
   })
 }
-
-function loadPublic(){}
-
-async function loadMyGames(){ if(!user) return; const {data}=await supabase.from('games').select('*').eq('user_id',user.id); myGames.innerHTML=''; data.forEach(g=>{ const d=document.createElement('div'); d.className='listItem'; d.innerText='My Game'; d.onclick=()=>{input.value=g.rules; buildGame()}; myGames.appendChild(d) }) }
-async function loadPublic(){ const {data}=await supabase.from('games').select('*').eq('public',true).eq('flagged',false); publicGames.innerHTML=''; data.forEach(g=>{ const d=document.createElement('div'); d.className='listItem'; d.innerText='Public Game'; d.onclick=()=>{input.value=g.rules; buildGame()}; publicGames.appendChild(d) }) }
-
-// ===== ADMIN =====
-async function loadAdmin(){ if(!isAdmin) return;(){ const {data}=await supabase.from('games').select('*'); adminGames.innerHTML=''; data.forEach(g=>{ const d=document.createElement('div'); d.className='listItem'; d.innerText=(g.public?'[PUBLIC] ':'')+g.rules.split('\n')[0]; const b=document.createElement('button'); b.innerText='FLAG'; b.onclick=async()=>{ await supabase.from('games').update({flagged:true}).eq('id',g.id); show('Flagged'); loadAdmin() }; d.appendChild(b); adminGames.appendChild(d) }) }
-
-
+loadMyGames()
 
 // ===== SHARE =====
-window.shareGame=()=>{ const u=btoa(encodeURIComponent(input.value)); navigator.clipboard.writeText(location.origin+location.pathname+'?game='+u); show('Link copied') }
+function shareGame(){
+  const data=btoa(encodeURIComponent(input.value))
+  navigator.clipboard.writeText(location.origin+location.pathname+'?game='+data)
+  show('Link copied')
+}
 
-(function(){ const p=new URLSearchParams(location.search); if(p.has('game')){ input.value=decodeURIComponent(atob(p.get('game'))); buildGame() } })()
+const p=new URLSearchParams(location.search)
+if(p.has('game')){
+  input.value=decodeURIComponent(atob(p.get('game')))
+  buildGame()
+}
 </script>
 </body>
 </html>
