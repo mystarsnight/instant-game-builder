@@ -92,11 +92,40 @@ window.buildGame=()=>{
 }
 
 function spawn(n){
-  const d=document.createElement('div'); d.className='obj'; d.innerText=n.toUpperCase()
-  d.style.width='60px'; d.style.height='60px'; d.style.background=n==='coin'?'#fbc02d':'#43a047'
-  d.style.left=Math.random()*80+'%'; d.style.top=Math.random()*80+'%'
-  d.onclick=()=>{ rules.forEach(r=>{ if(r.startsWith('click '+n)&&r.includes('gain')) score+=parseInt(r.split('gain')[1]) }); update() }
-  gameArea.appendChild(d); objects[n]=d
+  const d=document.createElement('div')
+  d.className='obj'
+  d.style.width='64px'
+  d.style.height='64px'
+  d.style.borderRadius='12px'
+  d.style.backgroundImage=`url(${generateAIImage(n)})`
+  d.style.backgroundSize='cover'
+  d.style.backgroundPosition='center'
+  d.title=n
+  d.style.left=Math.random()*80+'%'
+  d.style.top=Math.random()*80+'%'
+  d.onclick=()=>{
+    rules.forEach(r=>{
+      if(r.startsWith('click '+n)&&r.includes('gain')){
+        score+=parseInt(r.split('gain')[1])
+      }
+    })
+    update()
+  }
+  gameArea.appendChild(d)
+  objects[n]=d
+}
+
+function generateAIImage(name){
+  // deterministic "AI-style" avatar using SVG
+  const colors=['#ef5350','#42a5f5','#66bb6a','#ffa726','#ab47bc']
+  let hash=0; for(let i=0;i<name.length;i++) hash+=name.charCodeAt(i)
+  const c=colors[hash%colors.length]
+  const letter=name[0].toUpperCase()
+  const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>
+    <rect width='100%' height='100%' rx='12' fill='${c}'/>
+    <text x='50%' y='55%' text-anchor='middle' font-size='32' fill='white' font-family='Arial'>${letter}</text>
+  </svg>`
+  return 'data:image/svg+xml;base64,'+btoa(svg)
 }
 
 window.onkeydown=e=>keys[e.key]=true
