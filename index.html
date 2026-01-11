@@ -7,14 +7,14 @@
 <style>
 body{font-family:Arial;background:#b3d9ff;margin:0;padding:10px}
 #app{background:#fff;border-radius:12px;padding:12px;max-width:900px;margin:auto}
-textarea,button,input{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
+textarea,button{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
 button{background:#4caf50;color:#fff;border:none;cursor:pointer}
-.small{width:auto;padding:6px 10px;font-size:12px;margin-left:4px}
-#gameArea{margin-top:15px;height:350px;border-radius:10px;background:#e3f2fd;position:relative;overflow:hidden}
-.obj{position:absolute;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#fff;cursor:pointer;user-select:none}
+button.small{width:auto;padding:6px 10px;font-size:12px;margin-left:4px}
+#gameArea{margin-top:15px;height:360px;border-radius:10px;background:#e3f2fd;position:relative;overflow:hidden}
+.obj{position:absolute;width:64px;height:64px;border-radius:12px;background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;user-select:none}
 #stats{margin-top:10px;font-weight:bold}
-.row{background:#eee;padding:6px;border-radius:6px;margin:4px 0;display:flex;align-items:center;gap:6px}
 .notice{background:#222;color:#fff;padding:10px;border-radius:8px;margin:6px 0;display:none}
+.row{display:flex;align-items:center;gap:6px;background:#eee;padding:6px;border-radius:6px;margin:4px 0}
 </style>
 </head>
 <body>
@@ -28,11 +28,13 @@ button{background:#4caf50;color:#fff;border:none;cursor:pointer}
 spawn player
 spawn coin
 click coin gain 1
-score to win 5
+score to win 10
 press arrow move player"></textarea>
 
 <button onclick="build()">Build & Play</button>
-<button onclick="save()">Save</button>
+<button onclick="aiMakeGame()">🤖 AI Make Game</button>
+<button onclick="save()">💾 Save</button>
+<button onclick="copyLink()">🔗 Copy Link</button>
 
 <div id="gameArea"></div>
 <div id="stats"></div>
@@ -42,49 +44,38 @@ press arrow move player"></textarea>
 </div>
 
 <script>
-/* ===== HELPERS ===== */
+/* ===== BASIC ===== */
 const input=document.getElementById('input')
 const gameArea=document.getElementById('gameArea')
 const stats=document.getElementById('stats')
 const gamesDiv=document.getElementById('games')
 const notice=document.getElementById('notice')
+function show(msg){notice.innerText=msg;notice.style.display='block';setTimeout(()=>notice.style.display='none',2500)}
 
-function show(msg){
-  notice.innerText=msg
-  notice.style.display='block'
-  setTimeout(()=>notice.style.display='none',2500)
-}
-
-/* ===== GAME STATE ===== */
 let rules=[],objects={},score=0,winScore=5,keys={}
 
-/* ===== GAME ENGINE ===== */
+/* ===== GAME ===== */
 function build(){
   gameArea.innerHTML=''
   objects={}
   score=0
   winScore=5
-
   rules=input.value.split('\n').map(r=>r.trim()).filter(Boolean)
 
   rules.forEach(r=>{
     if(r.startsWith('spawn ')) spawn(r.split(' ')[1])
     if(r.startsWith('score to win')) winScore=parseInt(r.split(' ').pop())||5
   })
-
   update()
 }
 
 function spawn(name){
   const d=document.createElement('div')
   d.className='obj'
-  d.style.width='64px'
-  d.style.height='64px'
-  d.style.borderRadius='12px'
+  d.style.left=Math.random()*80+'%'
+  d.style.top=Math.random()*80+'%'
   d.style.backgroundImage=`url(${aiImage(name)})`
-  d.style.backgroundSize='cover'
-  d.style.left=Math.random()*280+'px'
-  d.style.top=Math.random()*220+'px'
+  d.innerText=name[0].toUpperCase()
 
   d.onclick=()=>{
     rules.forEach(r=>{
@@ -102,9 +93,9 @@ function spawn(name){
 function aiImage(name){
   const colors=['#ef5350','#42a5f5','#66bb6a','#ffa726','#ab47bc']
   let h=0;for(let c of name)h+=c.charCodeAt(0)
-  const c=colors[h%colors.length]
+  const col=colors[h%colors.length]
   const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>
-  <rect rx='12' width='100%' height='100%' fill='${c}'/>
+  <rect rx='12' width='100%' height='100%' fill='${col}'/>
   <text x='50%' y='55%' font-size='32' fill='white' text-anchor='middle'>${name[0].toUpperCase()}</text>
   </svg>`
   return 'data:image/svg+xml;base64,'+btoa(svg)
@@ -116,7 +107,7 @@ window.onkeyup=e=>keys[e.key]=false
 
 setInterval(()=>{
   if(objects.player && rules.includes('press arrow move player')){
-    let p=objects.player
+    const p=objects.player
     let x=p.offsetLeft,y=p.offsetTop
     if(keys.ArrowLeft)x-=5
     if(keys.ArrowRight)x+=5
@@ -127,63 +118,87 @@ setInterval(()=>{
   }
 },40)
 
+/* ===== UPDATE ===== */
 function update(){
-  stats.innerText=score>=winScore?'YOU WIN 🎉':'Score: '+score+' / '+winScore
+  if(score>=winScore){
+    stats.innerText='YOU WIN 🎉'
+    show('You win!')
+  }else{
+    stats.innerText=`Score: ${score} / ${winScore}`
+  }
 }
 
-/* ===== LOCAL SAVES ===== */
+/* ===== AI GAME MAKER (MOBILE SAFE) ===== */
+function aiMakeGame(){
+  const text=prompt(
+    "Describe your game:\n\nExamples:\ncollect coins to 10\navoid enemies\nclick items to score",
+    "collect coins to 10"
+  )
+  if(!text) return
+
+  const t=text.toLowerCase()
+  let out=["spawn player","press arrow move player"]
+
+  if(t.includes("coin")||t.includes("collect")){
+    out.push("spawn coin","click coin gain 1")
+  }
+  if(t.includes("enemy")||t.includes("avoid")){
+    out.push("spawn enemy")
+  }
+
+  const n=t.match(/\d+/)
+  out.push("score to win "+(n?n[0]:5))
+
+  input.value=out.join('\n')
+  build()
+  show("AI built your game")
+}
+
+/* ===== SAVE SYSTEM ===== */
 function getGames(){return JSON.parse(localStorage.getItem('games')||'[]')}
 function setGames(g){localStorage.setItem('games',JSON.stringify(g))}
 
 function save(){
-  const name=prompt('Game name?','My Game')
+  const name=prompt("Game name?","My Game")
   if(!name) return
   const g=getGames()
   g.push({id:Date.now(),name,rules:input.value})
   setGames(g)
   load()
-  show('Saved')
+  show("Saved")
 }
 
 function load(){
   gamesDiv.innerHTML=''
   getGames().forEach(game=>{
-    const r=document.createElement('div')
-    r.className='row'
+    const row=document.createElement('div')
+    row.className='row'
 
-    const t=document.createElement('span')
-    t.innerText=game.name
-
+    row.innerHTML=`<b>${game.name}</b>`
     const play=b('Play',()=>{input.value=game.rules;build()})
-    const rename=b('Rename',()=>{
-      const n=prompt('New name',game.name)
-      if(n){const g=getGames();g.find(x=>x.id===game.id).name=n;setGames(g);load()}
+    const ren=b('Rename',()=>{
+      const n=prompt("New name",game.name)
+      if(n){game.name=n;setGames(getGames());load()}
     })
     const del=b('Delete',()=>{
-      if(confirm('Delete?')){setGames(getGames().filter(x=>x.id!==game.id));load()}
+      if(confirm("Delete?")){
+        setGames(getGames().filter(x=>x.id!==game.id))
+        load()
+      }
     })
-    const link=b('Copy Link',()=>copyLink(game.rules))
-
-    r.append(t,play,rename,del,link)
-    gamesDiv.appendChild(r)
+    row.append(play,ren,del)
+    gamesDiv.appendChild(row)
   })
 }
+
+function b(t,f){const x=document.createElement('button');x.className='small';x.innerText=t;x.onclick=f;return x}
 load()
 
-function b(txt,fn){
-  const x=document.createElement('button')
-  x.className='small'
-  x.innerText=txt
-  x.onclick=fn
-  return x
-}
-
 /* ===== SHARE ===== */
-function copyLink(data){
-  const code=btoa(encodeURIComponent(data))
-  const url=location.origin+location.pathname+'?game='+code
-  navigator.clipboard.writeText(url)
-  show('Link copied')
+function copyLink(){
+  const d=btoa(encodeURIComponent(input.value))
+  navigator.clipboard.writeText(location.origin+location.pathname+"?game="+d)
+  show("Link copied")
 }
 
 const q=new URLSearchParams(location.search)
