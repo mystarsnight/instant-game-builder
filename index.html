@@ -25,11 +25,7 @@ button{background:#4caf50;color:#fff;border:none;cursor:pointer}
 
 <div id="notice" class="notice"></div>
 
-<h3>Account</h3>
-<input id="email" placeholder="Email">
-<input id="password" type="password" placeholder="Password">
-<button onclick="login()">Login / Sign Up</button>
-<div id="userStatus" class="small"></div>
+
 
 <h3>Game Rules</h3>
 <textarea id="input" rows="6"></textarea>
@@ -38,7 +34,7 @@ button{background:#4caf50;color:#fff;border:none;cursor:pointer}
 <button onclick="saveGame()">Save</button>
 <button onclick="publishGame()">Publish</button>
 <button onclick="shareGame()">Share</button>
-<button onclick="joinMultiplayer()">Join Multiplayer</button>
+
 
 <div id="gameArea"></div>
 <div id="stats"></div>
@@ -49,37 +45,16 @@ button{background:#4caf50;color:#fff;border:none;cursor:pointer}
 <h3>Public Games</h3>
 <div id="publicGames"></div>
 
-<div id="adminPanel" class="admin" style="display:none">
-<h3>Admin Panel</h3>
-<div id="adminGames"></div>
+
 </div>
 </div>
 
 <script type="module">
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
-
-const supabase = createClient(
-  'https://tmnpqtedyvifvabhvswl.supabase.co',
-  'sb_publishable_EnfDPdGC3knvrMKgIrtU2g_2zUJL_Fs'
-)
-
-let user=null, isAdmin=false
-const SUPER_ADMIN_EMAIL = 'blakestalder123@gmail.com'
+// Standalone version – no accounts, no backend
 
 function show(msg){ notice.innerText=msg; notice.style.display='block'; setTimeout(()=>notice.style.display='none',3000) }
 
-// ===== AUTH =====
-window.login=async()=>{
-  const e=email.value,p=password.value
-  let r=await supabase.auth.signInWithPassword({email:e,password:p})
-  if(r.error) r=await supabase.auth.signUp({email:e,password:p})
-  if(r.error) return show(r.error.message)
-  user=r.data.user
-  userStatus.innerText='Logged in as '+user.email
-  isAdmin = user.email === SUPER_ADMIN_EMAIL('@admin.com')
-  adminPanel.style.display=isAdmin?'block':'none'
-  show('Logged in')
-  loadMyGames(); loadPublic(); if(isAdmin) loadAdmin()
+
 }
 
 // ===== GAME ENGINE =====
@@ -170,23 +145,7 @@ async function loadPublic(){ const {data}=await supabase.from('games').select('*
 // ===== ADMIN =====
 async function loadAdmin(){ if(!isAdmin) return;(){ const {data}=await supabase.from('games').select('*'); adminGames.innerHTML=''; data.forEach(g=>{ const d=document.createElement('div'); d.className='listItem'; d.innerText=(g.public?'[PUBLIC] ':'')+g.rules.split('\n')[0]; const b=document.createElement('button'); b.innerText='FLAG'; b.onclick=async()=>{ await supabase.from('games').update({flagged:true}).eq('id',g.id); show('Flagged'); loadAdmin() }; d.appendChild(b); adminGames.appendChild(d) }) }
 
-// ===== MULTIPLAYER (REALTIME) =====
-let room=null
-window.joinMultiplayer=async()=>{
-  room=prompt('Room name?')
-  if(!room) return
-  await supabase.from('players').upsert({room:room,user_id:user.id,x:0,y:0})
-  show('Joined room '+room)
-}
 
-async function syncPlayer(){ if(!room||!user||!objects.player) return; await supabase.from('players').upsert({room:room,user_id:user.id,x:objects.player.offsetLeft,y:objects.player.offsetTop}) }
-
-supabase.channel('players').on('postgres_changes',{event:'*',schema:'public',table:'players'},payload=>{
-  if(!room||payload.new.room!==room||payload.new.user_id===user?.id) return
-  let o=objects['p_'+payload.new.user_id]
-  if(!o){ o=document.createElement('div'); o.className='obj'; o.style.background='#1e88e5'; o.innerText='P'; gameArea.appendChild(o); objects['p_'+payload.new.user_id]=o }
-  o.style.left=payload.new.x+'px'; o.style.top=payload.new.y+'px'
-}).subscribe()
 
 // ===== SHARE =====
 window.shareGame=()=>{ const u=btoa(encodeURIComponent(input.value)); navigator.clipboard.writeText(location.origin+location.pathname+'?game='+u); show('Link copied') }
