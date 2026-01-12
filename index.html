@@ -2,192 +2,141 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Instant Game Builder</title>
+<title>Instant Game Builder – No Rules Mode</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{margin:0;font-family:Arial;background:#b3d9ff}
-#app{max-width:1000px;margin:auto;background:#fff;padding:12px;border-radius:12px}
+#app{max-width:1100px;margin:auto;background:#fff;padding:12px;border-radius:12px}
 textarea,button,input{width:100%;padding:10px;margin:6px 0;border-radius:8px;font-size:14px}
 button{background:#4caf50;color:#fff;border:none;cursor:pointer}
 button.small{width:auto;padding:6px 10px;font-size:12px}
-#game{height:360px;background:#e3f2fd;border-radius:10px;position:relative;overflow:hidden}
-.obj{width:56px;height:56px;border-radius:12px;position:absolute;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.enemy{filter:hue-rotate(180deg)}
-.row{display:flex;gap:6px;background:#eee;padding:6px;border-radius:6px;margin:4px 0;flex-wrap:wrap}
-#notice{background:#222;color:#fff;padding:8px;border-radius:6px;display:none}
-#overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:999}
-#modal{background:#fff;padding:20px;border-radius:12px;max-width:360px;text-align:center}
-#mobileAI{background:#e8f5e9;padding:12px;border-radius:10px;margin-bottom:10px}
+#game{height:420px;background:#e3f2fd;border-radius:10px;position:relative;overflow:hidden}
+.entity{width:48px;height:48px;position:absolute;user-select:none}
+.player{background:#1e88e5;border-radius:10px}
+.enemy{background:#e53935;border-radius:50%}
+.coin{background:gold;border-radius:50%}
+.bullet{background:#000;width:10px;height:10px;border-radius:50%}
+#hud{margin-top:6px;font-weight:bold}
+#joystick{position:absolute;bottom:10px;left:10px;width:120px;height:120px;border-radius:50%;background:rgba(0,0,0,.2);display:none}
+#stick{width:50px;height:50px;border-radius:50%;background:#333;position:absolute;left:35px;top:35px}
 </style>
 </head>
 <body>
-
-<div id="overlay">
-  <div id="modal">
-    <h3>AI Game Builder</h3>
-    <p>Type ANY game idea.<br>No rules needed.</p>
-    <button onclick="dismiss()">OK</button>
-  </div>
-</div>
-
 <div id="app">
-<h2>Instant Game Builder</h2>
+<h2>Instant Game Builder – ZERO RULES</h2>
 
-<div id="mobileAI">
-  <b>🤖 AI Game Generator</b>
-  <input id="aiInput" placeholder="Example: enemy game with coins, 1k win">
-  <button onclick="aiGame()">Generate Game</button>
-</div>
-
-<div id="notice"></div>
-
-<textarea id="rules" rows="7"></textarea>
-
-<button onclick="buildGame()">▶ Play</button>
+<input id="aiInput" placeholder="Describe ANY game (fps, platformer, coins, bosses, levels, timer, anything)">
+<button onclick="generateGame()">🤖 Generate & Play Game</button>
 <button onclick="saveGame()">💾 Save</button>
 <button onclick="copyLink()">🔗 Copy Link</button>
 <button onclick="exportRoblox()">🎮 Export Roblox</button>
 
-<div id="game"></div>
-<div id="stats"></div>
-
+<div id="game">
+  <div id="joystick"><div id="stick"></div></div>
+</div>
+<div id="hud"></div>
 <h3>My Games</h3>
 <div id="library"></div>
 </div>
 
 <script>
-const rulesBox=rules=document.getElementById("rules")
-const game=document.getElementById("game")
-const stats=document.getElementById("stats")
-const lib=document.getElementById("library")
-const notice=document.getElementById("notice")
-const aiInput=document.getElementById("aiInput")
+/* CORE STATE */
+const game=document.getElementById('game')
+const hud=document.getElementById('hud')
+const aiInput=document.getElementById('aiInput')
+const joystick=document.getElementById('joystick')
+const stick=document.getElementById('stick')
+let player,enemies=[],coins=[],bullets=[],score=0,health=100,level=1,goal=10,keys={},touchDir={x:0,y:0}
 
-function show(t){notice.innerText=t;notice.style.display="block";setTimeout(()=>notice.style.display="none",2000)}
-if(localStorage.getItem("seen")!=="1"){}
-function dismiss(){document.getElementById("overlay").style.display="none";localStorage.setItem("seen","1")}
+/* INPUT */
+window.onkeydown=e=>keys[e.key]=true
+window.onkeyup=e=>keys[e.key]=false
 
-let objs={},enemies=[],rulesArr=[]
-let score=0,health=100,win=10,keys={}
+joystick.addEventListener('touchstart',e=>e.preventDefault())
+joystick.addEventListener('touchmove',e=>{
+  const r=joystick.getBoundingClientRect()
+  const t=e.touches[0]
+  let x=t.clientX-r.left-60
+  let y=t.clientY-r.top-60
+  x=Math.max(-40,Math.min(40,x))
+  y=Math.max(-40,Math.min(40,y))
+  stick.style.left=60+x-25+'px'
+  stick.style.top=60+y-25+'px'
+  touchDir={x:x/40,y:y/40}
+})
+joystick.addEventListener('touchend',()=>{stick.style.left='35px';stick.style.top='35px';touchDir={x:0,y:0}})
 
-function emoji(name){
-  const m={player:"🙂",coin:"🪙",gem:"💎",enemy:"👾"}
-  return m[name]||"⭐"
-}
-
-function img(e){
-  return `data:image/svg+xml;base64,${btoa(`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect rx='12' width='100%' height='100%' fill='#fff'/><text x='50%' y='55%' font-size='40' text-anchor='middle'>${e}</text></svg>`)}`
-}
-
-function buildGame(){
-  game.innerHTML=""
-  objs={};enemies=[]
-  score=0;health=100;win=10
-  rulesArr=rulesBox.value.split("\n")
-
-  rulesArr.forEach(r=>{
-    if(r.startsWith("spawn "))spawn(r.split(" ")[1])
-    if(r==="enemy")spawnEnemy()
-    if(r.startsWith("win"))win=parseNum(r)
-  })
-  update()
-}
-
-function spawn(name){
-  if(objs[name])return
-  const d=document.createElement("div")
-  d.className="obj"
-  d.style.background=`url(${img(emoji(name))}) center/contain no-repeat`
-  d.style.left=Math.random()*80+"%"
-  d.style.top=Math.random()*80+"%"
-  d.onclick=()=>{score++;update()}
-  game.appendChild(d);objs[name]=d
-}
-
-function spawnEnemy(){
-  const e=document.createElement("div")
-  e.className="obj enemy"
-  e.style.background=`url(${img("👾")}) center/contain no-repeat`
-  e.style.left=Math.random()*80+"%"
-  e.style.top=Math.random()*80+"%"
-  game.appendChild(e);enemies.push(e)
-}
-
+/* GAME LOOP */
 setInterval(()=>{
-  if(objs.player){
-    enemies.forEach(en=>{
-      let ex=en.offsetLeft,ey=en.offsetTop
-      let px=objs.player.offsetLeft,py=objs.player.offsetTop
-      en.style.left=ex+(px>ex?2:-2)+"px"
-      en.style.top=ey+(py>ey?2:-2)+"px"
-      if(Math.abs(px-ex)<32&&Math.abs(py-ey)<32)health--
-    })
-  }
-  update()
-},100)
+  if(!player) return
+  let vx=(keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0)+touchDir.x
+  let vy=(keys.ArrowDown?1:0)-(keys.ArrowUp?1:0)+touchDir.y
+  move(player,vx*4,vy*4)
 
-function update(){
-  if(health<=0){stats.innerText="GAME OVER";return}
-  if(score>=win){stats.innerText="YOU WIN";return}
-  stats.innerText=`Score ${score}/${win} | Health ${health}`
-}
-
-function parseNum(t){
-  let m=t.match(/(\d+)(k)?/)
-  return m?parseInt(m[1])*(m[2]?1000:1):10
-}
-
-function aiGame(){
-  let t=aiInput.value.toLowerCase()
-  let out=["spawn player"]
-  if(t.includes("enemy"))out.push("enemy")
-  if(t.includes("coin"))out.push("spawn coin")
-  out.push("win "+(parseNum(t)||10))
-  rulesBox.value=out.join("\n")
-  buildGame()
-  show("Game created by AI")
-}
-
-function saveGame(){
-  let n=prompt("Name game")
-  if(!n)return
-  let g=JSON.parse(localStorage.getItem("games")||"[]")
-  g.push({id:Date.now(),name:n,rules:rulesBox.value})
-  localStorage.setItem("games",JSON.stringify(g))
-  loadGames()
-}
-
-function loadGames(){
-  lib.innerHTML=""
-  JSON.parse(localStorage.getItem("games")||"[]").forEach(g=>{
-    let d=document.createElement("div")
-    d.className="row"
-    d.innerHTML=`<b>${g.name}</b>`
-    d.append(btn("Play",()=>{rulesBox.value=g.rules;buildGame()}))
-    d.append(btn("Rename",()=>{g.name=prompt(\"New name\",g.name);saveAll()}))
-    d.append(btn("Delete",()=>{saveAll(x=>x.id!==g.id)}))
-    lib.appendChild(d)
+  enemies.forEach(e=>{
+    chase(e,player,1.5+level*0.2)
+    if(collide(e,player)){health-=1}
   })
+
+  bullets.forEach(b=>{
+    move(b,8,0)
+    enemies.forEach((e,i)=>{if(collide(b,e)){e.remove();enemies.splice(i,1);b.remove()}})
+  })
+
+  coins.forEach((c,i)=>{if(collide(c,player)){score++;c.remove();coins.splice(i,1)}})
+
+  if(score>=goal){level++;spawnWave()}
+  if(health<=0){hud.innerText='GAME OVER';player=null}
+  hud.innerText=`Score ${score}/${goal} | Health ${health} | Level ${level}`
+},30)
+
+/* HELPERS */
+function ent(cls,x,y){const d=document.createElement('div');d.className='entity '+cls;d.style.left=x+'px';d.style.top=y+'px';game.appendChild(d);return d}
+function move(o,x,y){o.style.left=o.offsetLeft+x+'px';o.style.top=o.offsetTop+y+'px'}
+function chase(e,p,s){let dx=p.offsetLeft-e.offsetLeft,dy=p.offsetTop-e.offsetTop;let d=Math.hypot(dx,dy)||1;e.style.left=e.offsetLeft+dx/d*s+'px';e.style.top=e.offsetTop+dy/d*s+'px'}
+function collide(a,b){return Math.abs(a.offsetLeft-b.offsetLeft)<40&&Math.abs(a.offsetTop-b.offsetTop)<40}
+
+/* GENERATOR (NO RULES AT ALL) */
+function generateGame(){
+  game.querySelectorAll('.entity').forEach(e=>e.remove())
+  enemies=[];coins=[];bullets=[];score=0;health=100;level=1
+  player=ent('player',200,200)
+
+  const t=aiInput.value.toLowerCase()
+  goal=t.includes('100')?100:t.includes('50')?50:10
+
+  if('ontouchstart' in window) joystick.style.display='block'
+
+  spawnWave()
 }
-function saveAll(f){
-  let g=JSON.parse(localStorage.getItem("games")||"[]")
-  localStorage.setItem("games",JSON.stringify(f?g.filter(f):g))
-  loadGames()
+
+function spawnWave(){
+  for(let i=0;i<level+2;i++) enemies.push(ent('enemy',Math.random()*350,Math.random()*300))
+  for(let i=0;i<level+3;i++) coins.push(ent('coin',Math.random()*350,Math.random()*300))
 }
-function btn(t,f){let b=document.createElement("button");b.className="small";b.innerText=t;b.onclick=f;return b}
+
+window.onclick=()=>{
+  if(!player) return
+  const b=ent('bullet',player.offsetLeft+40,player.offsetTop+20)
+  bullets.push(b)
+}
+
+/* SAVE */
+function getGames(){return JSON.parse(localStorage.getItem('games')||'[]')}
+function setGames(g){localStorage.setItem('games',JSON.stringify(g))}
+function saveGame(){const n=prompt('Game name');if(!n)return;const g=getGames();g.push({id:Date.now(),name:n,data:aiInput.value});setGames(g);loadGames()}
+function loadGames(){library.innerHTML='';getGames().forEach(g=>{const d=document.createElement('div');d.innerHTML=`<b>${g.name}</b>`;d.append(btn('Play',()=>{aiInput.value=g.data;generateGame()}),btn('Delete',()=>{setGames(getGames().filter(x=>x.id!==g.id));loadGames()}));library.appendChild(d)})}
+function btn(t,f){const b=document.createElement('button');b.className='small';b.innerText=t;b.onclick=f;return b}
 loadGames()
 
-function copyLink(){
-  navigator.clipboard.writeText(location.href)
-  show("Link copied")
-}
+/* SHARE */
+function copyLink(){navigator.clipboard.writeText(location.href.split('?')[0]+'?g='+btoa(aiInput.value))}
+const q=new URLSearchParams(location.search);if(q.get('g')){aiInput.value=atob(q.get('g'));generateGame()}
 
+/* ROBLOX EXPORT */
 function exportRoblox(){
-  const lua=`print('Instant Game Builder Export')`
-  const a=document.createElement("a")
-  a.href=URL.createObjectURL(new Blob([lua],{type:"text/plain"}))
-  a.download="InstantGame.lua"
-  a.click()
+  const lua=`-- Generated Game\nprint('Score based action game')`
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([lua],{type:'text/plain'}));a.download='Game.lua';a.click()
 }
 </script>
 </body>
